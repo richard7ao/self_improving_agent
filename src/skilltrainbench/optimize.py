@@ -21,6 +21,16 @@ import httpx
 
 from . import evaluate
 from .config import HackathonCfg, check_skill, task_names
+from .optimizer_tools import (
+    audit_generated_scripts,
+    candidate_diversity,
+    classify_attempts,
+    duplicate_candidate_indexes,
+    evaluation_scores,
+    paired_statistics,
+    provenance_snapshot,
+    write_json_atomic,
+)
 
 _REVIEW_SYSTEM = """You review a skill used by a frozen agent on public training tasks.
 Find general, reusable causes of low scores across tasks. Do not reproduce task text,
@@ -167,6 +177,9 @@ def materialize_candidate(payload: dict, destination: Path, cfg: HackathonCfg,
         raise ValueError(
             "generated supporting files are not routed from SKILL.md: " + ", ".join(sorted(unreferenced))
         )
+    script_audit = audit_generated_scripts(destination)
+    if not script_audit["ok"]:
+        raise ValueError(f"generated skill script audit failed: {json.dumps(script_audit, ensure_ascii=False)}")
     _reject_task_copy(_skill_files(destination), forbidden_texts or [])
     rationale = payload.get("rationale", "")
     return rationale if isinstance(rationale, str) else ""
@@ -259,6 +272,7 @@ def _observations(eval_dir: Path, result: dict, task_context: dict[str, object])
                 "trajectory": _trajectory_evidence(eval_dir, row.get("trial_dir")),
             })
     return json.dumps({"summary": result.get("summary"), "tasks": task_context,
+                       "failure_summary": classify_attempts(attempts),
                        "attempts": attempts}, ensure_ascii=False)
 
 
@@ -304,12 +318,56 @@ def _trajectory_evidence(eval_dir: Path, trial_dir: str | None) -> dict:
 
 def _should_promote(incumbent_tune: dict, incumbent_validation: dict,
                     challenger_tune: dict, challenger_validation: dict,
-                    split: Split, min_improvement: float) -> bool:
+                    split: Split, min_improvement: float, *, require_confidence: bool = False,
+                    confidence: float = 0.95, bootstrap_iterations: int = 5000,
+                    seed: int = 0) -> bool:
     aggregate_improved = (_aggregate(challenger_tune, challenger_validation, split)
                           > _aggregate(incumbent_tune, incumbent_validation, split) + min_improvement)
     validation_improved = (not split.validation or
                            _rate(challenger_validation) > _rate(incumbent_validation))
-    return aggregate_improved and validation_improved
+    if not require_confidence:
+        return aggregate_improved and validation_improved
+    evidence = _promotion_evidence(
+        incumbent_tune, incumbent_validation, challenger_tune, challenger_validation,
+        confidence=confidence, bootstrap_iterations=bootstrap_iterations, seed=seed,
+    )
+    confidence_passed = bool(
+        evidence.get("combined")
+        and evidence["combined"]["ci"][0] > min_improvement
+    )
+    return aggregate_improved and validation_improved and confidence_passed
+
+
+def _promotion_evidence(incumbent_tune: dict, incumbent_validation: dict,
+                        challenger_tune: dict, challenger_validation: dict, *,
+                        confidence: float, bootstrap_iterations: int, seed: int) -> dict:
+    incumbent_tune_scores = evaluation_scores(incumbent_tune)
+    challenger_tune_scores = evaluation_scores(challenger_tune)
+    if not (set(incumbent_tune_scores) & set(challenger_tune_scores)):
+        return {"available": False, "reason": "evaluation results contain no paired per-task scores",
+                "tune": None, "validation": None, "combined": None}
+    tune = paired_statistics(incumbent_tune_scores, challenger_tune_scores,
+                             confidence=confidence, iterations=bootstrap_iterations, seed=seed)
+    incumbent_all = dict(incumbent_tune_scores)
+    challenger_all = dict(challenger_tune_scores)
+    incumbent_validation_scores = evaluation_scores(incumbent_validation)
+    challenger_validation_scores = evaluation_scores(challenger_validation)
+    incumbent_all.update(incumbent_validation_scores)
+    challenger_all.update(challenger_validation_scores)
+    evidence = {
+        "available": True,
+        "tune": tune,
+        "combined": paired_statistics(incumbent_all, challenger_all, confidence=confidence,
+                                      iterations=bootstrap_iterations, seed=seed + 1),
+    }
+    if incumbent_validation_scores and challenger_validation_scores:
+        evidence["validation"] = paired_statistics(
+            incumbent_validation_scores, challenger_validation_scores, confidence=confidence,
+            iterations=bootstrap_iterations, seed=seed + 2,
+        )
+    else:
+        evidence["validation"] = None
+    return evidence
 
 
 async def _score(cfg: HackathonCfg, domain: str, skill: Path, out: Path, tasks: list[str],
@@ -360,7 +418,9 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
                            concurrency: int | None,
                            optimizer_base_url: str | None = None, optimizer_key: str | None = None,
                            candidate_parallelism: int | None = None,
-                           keep_candidates: bool = False, resume: bool = False) -> dict:
+                           keep_candidates: bool = False, resume: bool = False,
+                           require_confidence: bool = False, promotion_confidence: float = 0.95,
+                           bootstrap_iterations: int = 5000) -> dict:
     if iterations < 1 or candidates < 1:
         raise ValueError("--iterations and --candidates must be positive")
     if min_improvement < 0:
@@ -369,6 +429,10 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
         raise ValueError("--concurrency must be positive")
     if candidate_parallelism is not None and candidate_parallelism < 1:
         raise ValueError("--candidate-parallelism must be positive")
+    if not 0 < promotion_confidence < 1:
+        raise ValueError("--promotion-confidence must be between 0 and 1")
+    if bootstrap_iterations < 1:
+        raise ValueError("--bootstrap-iterations must be positive")
     domain = cfg.domain(domain_name)
     live = Path(skill_dir).expanduser().resolve()
     check = check_skill(live, cfg)
@@ -397,6 +461,12 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
         state = {
             "domain": domain_name, "skill_dir": str(live), "model": optimizer_model or cfg.learner_model,
             "seed": seed, "split": {"tune": split.tune, "validation": split.validation}, "rounds": [],
+            "promotion_policy": {"min_improvement": min_improvement,
+                                 "require_confidence": require_confidence,
+                                 "confidence": promotion_confidence,
+                                 "bootstrap_iterations": bootstrap_iterations},
+            "provenance": provenance_snapshot(cfg.path.resolve().parent,
+                                               extra_paths=[cfg.path, live]),
         }
 
     optimizer_base = (optimizer_base_url or upstream_base_url).rstrip("/")
@@ -424,7 +494,7 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
             incumbent_score = _aggregate(incumbent_tune, incumbent_validation, split)
             state["initial_score"] = incumbent_score
             state["final_score"] = incumbent_score
-            state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+            write_json_atomic(state_path, state)
             current_eval_dir = output / "initial" / "tune"
             current_tune = incumbent_tune
         tune_context = _task_context(domain.dataset_dir, split.tune)
@@ -473,6 +543,19 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
 
             generated = await asyncio.gather(*(generate(i) for i in range(1, candidates + 1)),
                                              return_exceptions=True)
+            successful = [(position, item) for position, item in enumerate(generated)
+                          if not isinstance(item, Exception)]
+            successful_paths = [item[1] for _, item in successful]
+            diversity = candidate_diversity(successful_paths) if successful_paths else {
+                "candidates": [], "pairs": [], "minimum_pairwise_distance": None,
+                "exact_duplicate_pairs": 0,
+            }
+            write_json_atomic(round_dir / "candidate-diversity.json", diversity)
+            for duplicate_index in duplicate_candidate_indexes(successful_paths):
+                position, item = successful[duplicate_index]
+                generated[position] = ValueError(
+                    f"candidate {item[0]} exactly duplicates an earlier generated candidate"
+                )
             total_slots = concurrency or cfg.concurrency
             parallel_evals = min(candidate_parallelism or candidates, candidates, total_slots)
             per_eval_slots = max(1, total_slots // parallel_evals)
@@ -509,7 +592,7 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
             scored = [record for record in records if record["status"] == "scored"]
             if not scored:
                 state["last_failure"] = {"round": round_index, "candidates": records}
-                state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+                write_json_atomic(state_path, state)
                 raise RuntimeError(f"round {round_index}: every candidate failed generation or evaluation")
             challenger = max(scored, key=lambda record: (record["tune_score"], -record["index"]))
             challenger_path = Path(challenger["path"])
@@ -533,9 +616,17 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
             challenger_score = _aggregate(challenger["result"], challenger_validation, split)
             previous_score = incumbent_score
             previous_validation_score = _rate(incumbent_validation) if split.validation else None
-            promoted = _should_promote(incumbent_tune, incumbent_validation,
-                                       challenger["result"], challenger_validation,
-                                       split, min_improvement)
+            promotion_evidence = _promotion_evidence(
+                incumbent_tune, incumbent_validation, challenger["result"], challenger_validation,
+                confidence=promotion_confidence, bootstrap_iterations=bootstrap_iterations,
+                seed=seed + round_index * 10,
+            )
+            promoted = _should_promote(
+                incumbent_tune, incumbent_validation, challenger["result"], challenger_validation,
+                split, min_improvement, require_confidence=require_confidence,
+                confidence=promotion_confidence, bootstrap_iterations=bootstrap_iterations,
+                seed=seed + round_index * 10,
+            )
             if promoted:
                 _replace_tree(challenger_path, live)
                 incumbent_score = challenger_score
@@ -556,18 +647,19 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
                 "challenger_validation_score": (
                     _rate(challenger_validation) if split.validation else None
                 ),
+                "promotion_evidence": promotion_evidence,
                 "incumbent_score": incumbent_score, "promoted": promoted,
             }
             state["rounds"].append(round_record)
             state.pop("last_failure", None)
             state["final_score"] = incumbent_score
-            state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+            write_json_atomic(state_path, state)
             if not keep_candidates:
                 shutil.rmtree(candidates_dir)
 
     state["final_score"] = incumbent_score
     state["improvement"] = incumbent_score - state["initial_score"]
-    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    write_json_atomic(state_path, state)
     return state
 
 

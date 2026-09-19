@@ -51,6 +51,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="candidate evaluations run at once (default: auto within container concurrency)")
     op.add_argument("--keep-candidates", action="store_true", help="retain losing skill folders for debugging")
     op.add_argument("--resume", action="store_true", help="resume a compatible interrupted optimization directory")
+    op.add_argument("--require-confidence", action="store_true",
+                    help="require the paired bootstrap lower bound to exceed --min-improvement")
+    op.add_argument("--promotion-confidence", type=float, default=0.95,
+                    help="bootstrap interval confidence used for promotion evidence")
+    op.add_argument("--bootstrap-iterations", type=int, default=5000,
+                    help="paired bootstrap samples used for promotion evidence")
     op.add_argument("--config", default=None)
     ck = sub.add_parser("check-skill", help="static submission checks for a skill folder")
     ck.add_argument("skill")
@@ -151,6 +157,9 @@ def _run(args) -> int:
                 optimizer_base_url=args.optimizer_base_url, optimizer_key=optimizer_key,
                 concurrency=args.concurrency, candidate_parallelism=args.candidate_parallelism,
                 keep_candidates=args.keep_candidates, resume=args.resume,
+                require_confidence=args.require_confidence,
+                promotion_confidence=args.promotion_confidence,
+                bootstrap_iterations=args.bootstrap_iterations,
             ))
         except (OSError, ValueError, RuntimeError) as e:
             print(e)

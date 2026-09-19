@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SkillTrainBench Runs</title>
+  <style>
+    :root { color-scheme: dark; --bg:#08111f; --panel:#111d2e; --line:#23344b; --text:#e9f0fa; --muted:#8fa2bb; --good:#4ade80; --bad:#fb7185; --warn:#fbbf24; --accent:#60a5fa; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:radial-gradient(circle at top left,#13243d 0,#08111f 43%); color:var(--text); font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,sans-serif; min-height:100vh; }
+    main { width:min(1500px,calc(100% - 32px)); margin:0 auto; padding:30px 0 60px; }
+    h1 { margin:0; font-size:clamp(25px,4vw,42px); letter-spacing:-.04em; }
+    .subtitle { color:var(--muted); margin-top:5px; }
+    .top { display:flex; gap:20px; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; }
+    .toolbar { display:flex; gap:8px; flex-wrap:wrap; }
+    button,select,input { border:1px solid var(--line); color:var(--text); background:#0d1828; border-radius:9px; padding:9px 11px; font:inherit; }
+    button { cursor:pointer; } button:hover { border-color:var(--accent); }
+    .cards { display:grid; grid-template-columns:repeat(4,minmax(150px,1fr)); gap:12px; margin:24px 0; }
+    .card { background:linear-gradient(145deg,rgba(21,36,57,.96),rgba(13,25,42,.96)); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:0 12px 35px rgba(0,0,0,.16); }
+    .card-label { color:var(--muted); text-transform:uppercase; letter-spacing:.12em; font-size:11px; }
+    .card-value { font-size:26px; font-weight:750; margin-top:4px; }
+    .card-meta { color:var(--muted); margin-top:2px; font-size:12px; }
+    .panel { background:rgba(12,24,40,.94); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+    .table-wrap { overflow:auto; max-height:calc(100vh - 270px); }
+    table { width:100%; border-collapse:collapse; min-width:1100px; }
+    th { position:sticky; top:0; z-index:2; background:#132238; color:#9eb0c8; font-size:11px; letter-spacing:.08em; text-transform:uppercase; text-align:left; padding:11px 12px; border-bottom:1px solid var(--line); }
+    td { padding:11px 12px; border-bottom:1px solid rgba(35,52,75,.7); vertical-align:middle; }
+    tbody tr:hover { background:rgba(96,165,250,.055); }
+    #rows tr { cursor:pointer; }
+    .name { max-width:360px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:650; }
+    .pill { display:inline-flex; align-items:center; gap:6px; border-radius:99px; padding:4px 8px; border:1px solid var(--line); font-size:12px; white-space:nowrap; }
+    .dot { width:7px; height:7px; border-radius:50%; background:var(--muted); }
+    .running .dot { background:var(--warn); box-shadow:0 0 0 4px rgba(251,191,36,.12); animation:pulse 1.4s infinite; }
+    .complete .dot { background:var(--good); }
+    .positive { color:var(--good); font-weight:700; } .negative { color:var(--bad); font-weight:700; }
+    .muted { color:var(--muted); } .num { font-variant-numeric:tabular-nums; }
+    .progress { width:90px; height:6px; border-radius:9px; background:#223149; overflow:hidden; display:inline-block; margin-right:7px; }
+    .progress > span { height:100%; display:block; background:var(--accent); }
+    .empty { padding:50px; text-align:center; color:var(--muted); }
+    .error { background:rgba(251,113,133,.12); border:1px solid rgba(251,113,133,.35); color:#fecdd3; padding:12px; border-radius:10px; margin:16px 0; display:none; }
+    dialog { width:min(1350px,calc(100% - 28px)); max-height:88vh; color:var(--text); background:#0b1727; border:1px solid var(--line); border-radius:16px; padding:0; box-shadow:0 30px 90px rgba(0,0,0,.65); }
+    dialog::backdrop { background:rgba(1,6,15,.74); backdrop-filter:blur(3px); }
+    .dialog-head { position:sticky; top:0; z-index:3; background:#111f33; display:flex; justify-content:space-between; align-items:center; gap:16px; padding:15px 18px; border-bottom:1px solid var(--line); }
+    .dialog-head h2 { font-size:17px; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .dialog-body { overflow:auto; max-height:calc(88vh - 60px); }
+    .close { font-size:18px; padding:5px 11px; }
+    @keyframes pulse { 50% { opacity:.45; } }
+    @media(max-width:800px){ .cards{grid-template-columns:repeat(2,1fr)} main{width:min(100% - 18px,1500px);padding-top:18px} }
+  </style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div><h1>Run dashboard</h1><div class="subtitle" id="subtitle">Loading benchmark evidence…</div></div>
+    <div class="toolbar">
+      <select id="domain"><option value="all">All domains</option><option>health</option><option>hle</option><option>qf</option><option>tau3</option><option>unknown</option></select>
+      <select id="status"><option value="all">All statuses</option><option value="running">Running</option><option value="complete">Complete</option><option value="incomplete">Incomplete</option><option value="awaiting-summary">Awaiting summary</option></select>
+      <input id="search" placeholder="Search runs">
+      <button id="refresh">Refresh</button>
+    </div>
+  </div>
+  <div class="error" id="error"></div>
+  <section class="cards" id="cards"></section>
+  <section class="panel"><div class="table-wrap"><table>
+    <thead><tr><th>Run</th><th>Domain</th><th>Status</th><th>Skill</th><th>Placebo</th><th>Net Δ</th><th>Tasks</th><th>Jobs</th><th>Delivery</th><th>Tokens</th><th>Cost</th><th>Updated</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table><div class="empty" id="empty" hidden>No runs match these filters.</div></div></section>
+</main>
+<dialog id="detail"><div class="dialog-head"><h2 id="detail-title">Run jobs</h2><button class="close" id="detail-close">×</button></div><div class="dialog-body"><table><thead><tr><th>Task</th><th>Arm</th><th>State</th><th>Score</th><th>Passed</th><th>Response</th><th>Tool calls</th><th>Tokens</th><th>Duration</th><th>Metrics</th></tr></thead><tbody id="job-rows"></tbody></table><div class="empty" id="job-empty" hidden>No Harbor jobs found.</div></div></dialog>
+<script>
+let payload={runs:[],domains:{}};
+const fmtScore=v=>v==null?'—':Number(v).toFixed(4);
+const fmtInt=v=>v==null?'—':new Intl.NumberFormat().format(v);
+const fmtCost=v=>v==null?'—':'$'+Number(v).toFixed(v<.1?4:2);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const deltaClass=v=>v>0?'positive':v<0?'negative':'';
+function renderCards(){
+  const domains=['health','hle','qf','tau3'];
+  document.querySelector('#cards').innerHTML=domains.map(d=>{const x=payload.domains[d]||{};return `<div class="card"><div class="card-label">${d}</div><div class="card-value ${deltaClass(x.latest_net_delta)}">${fmtScore(x.latest_net_delta)}</div><div class="card-meta">latest net Δ · ${x.completed||0} complete · ${x.active||0} active</div></div>`}).join('');
+}
+function renderRows(){
+  const domain=document.querySelector('#domain').value,status=document.querySelector('#status').value,q=document.querySelector('#search').value.toLowerCase();
+  const runs=payload.runs.filter(r=>(domain==='all'||r.domain===domain)&&(status==='all'||r.status===status)&&r.name.toLowerCase().includes(q));
+  document.querySelector('#empty').hidden=!!runs.length;
+  document.querySelector('#rows').innerHTML=runs.map(r=>{
+    const pct=r.jobs?Math.round(100*r.jobs_finished/r.jobs):0;
+    const progress=r.jobs?`<span class="progress"><span style="width:${pct}%"></span></span>${r.jobs_finished}/${r.jobs}`:'—';
+    const delivery=r.empty_outputs==null?`${r.responses||0} responses`:`${r.empty_outputs} empty`;
+    return `<tr data-run="${esc(r.name)}" title="Click for individual job results"><td><div class="name">${esc(r.name)}</div><div class="muted">${esc(r.note||'')}</div></td><td>${esc(r.domain)}</td><td><span class="pill ${esc(r.status)}"><span class="dot"></span>${esc(r.status)}</span></td><td class="num">${fmtScore(r.skill_rate)}</td><td class="num">${fmtScore(r.placebo_rate)}</td><td class="num ${deltaClass(r.net_delta)}">${fmtScore(r.net_delta)}</td><td class="num">${r.n_tasks??'—'}</td><td class="num">${progress}</td><td class="num">${delivery}</td><td class="num">${fmtInt(r.tokens)}</td><td class="num">${fmtCost(r.cost_usd)}</td><td class="num">${new Date(r.updated_at).toLocaleTimeString()}</td></tr>`;
+  }).join('');
+  document.querySelectorAll('#rows tr').forEach(row=>row.addEventListener('click',()=>showJobs(row.dataset.run)));
+}
+async function showJobs(name){
+  const dialog=document.querySelector('#detail');document.querySelector('#detail-title').textContent=name;document.querySelector('#job-rows').innerHTML='<tr><td colspan="10" class="muted">Loading…</td></tr>';dialog.showModal();
+  try{const response=await fetch('/api/run?name='+encodeURIComponent(name),{cache:'no-store'});if(!response.ok)throw new Error(`HTTP ${response.status}`);const data=await response.json();document.querySelector('#job-empty').hidden=!!data.jobs.length;document.querySelector('#job-rows').innerHTML=data.jobs.map(j=>{const tokens=(j.input_tokens??0)+(j.output_tokens??0);const metrics=Object.entries(j.metrics||{}).map(([k,v])=>`${k}: ${v}`).join(' · ');return `<tr><td><div class="name">${esc(j.task_id)}</div><div class="muted">${esc(j.job)}</div></td><td>${esc(j.arm??'—')}</td><td><span class="pill ${esc(j.state)}"><span class="dot"></span>${esc(j.state)}</span></td><td class="num ${deltaClass(j.score)}">${fmtScore(j.score)}</td><td>${j.passed==null?'—':j.passed?'yes':'no'}</td><td class="num">${fmtInt(j.response_bytes)} B</td><td class="num">${j.tool_calls??'—'}</td><td class="num">${tokens?fmtInt(tokens):'—'}</td><td class="num">${j.duration_seconds==null?'—':j.duration_seconds+'s'}</td><td class="muted">${esc(metrics||'—')}</td></tr>`}).join('')}
+  catch(error){document.querySelector('#job-rows').innerHTML=`<tr><td colspan="10" class="negative">Could not load jobs: ${esc(error.message)}</td></tr>`}
+}
+async function load(){
+  try{const response=await fetch('/api/runs',{cache:'no-store'});if(!response.ok)throw new Error(`HTTP ${response.status}`);payload=await response.json();document.querySelector('#error').style.display='none';renderCards();renderRows();document.querySelector('#subtitle').textContent=`${payload.count} evaluations · ${payload.runs_dir} · refreshed ${new Date(payload.generated_at).toLocaleTimeString()}`}
+  catch(error){const box=document.querySelector('#error');box.textContent=`Could not load runs: ${error.message}`;box.style.display='block'}
+}
+for(const id of ['domain','status','search'])document.querySelector('#'+id).addEventListener(id==='search'?'input':'change',renderRows);
+document.querySelector('#refresh').addEventListener('click',load);
+document.querySelector('#detail-close').addEventListener('click',()=>document.querySelector('#detail').close());
+document.querySelector('#detail').addEventListener('click',event=>{if(event.target===event.currentTarget)event.currentTarget.close()});
+load();setInterval(load,5000);
+</script>
+</body>
+</html>

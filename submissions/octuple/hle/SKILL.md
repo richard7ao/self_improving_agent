@@ -1,153 +1,124 @@
 ---
 name: octuple-hle
-description: Route expert HLE questions through domain-specific solving, skeptical attack, offline verification, confidence calibration, and exact delivery.
+description: Solve HLE questions with early delivery, evidence-type routing, option comparison, one falsification pass, and exact formatting.
 ---
 
-# HLE routed solve–attack–verify protocol
+# HLE: answer early, then seek evidence
 
-Read `/app/instruction.md` once. Solve the stated task, not a nearby easier task.
-The task is incomplete until `/logs/agent/response.txt` is nonempty and validated.
-Never finish with only an agent message.
+Read `/app/instruction.md` once. The task is not complete until
+`/logs/agent/response.txt` is nonempty. Target 6–8 high-level tool calls and permit at
+most one answer correction. Never call `think`, inspect helper source, or build a review
+artifact merely to prove that a process was followed.
 
-## 1. Classify, parse, and preserve a candidate
+## 1. Save the best current answer by action 2
 
-Classify across all three axes:
-
-- **Domain:** `computer_science_ai`, `chemistry`, `engineering_physics`,
-  `image`, `factual_recall`, `mathematics_statistics`, `biology_medicine`,
-  `earth_space_science`, `social_science`, `humanities_law`, `mixed`, `uncertain`,
-  or `other`.
-- **Request:** factual identification, numerical calculation, symbolic derivation,
-  algorithm/code trace, proof, existence, sufficiency, necessity, minimum/maximum,
-  uniqueness, transformation/cipher, or image interpretation.
-- **Contract:** exact match, multiple choice, number, expression, string, entity/name,
-  formula, or short explanation.
-
-Extract the requested object, variables, units, sign/indexing conventions, boundary
-conditions, assumptions, image dependencies, precision, and output format. Record where
-each important variable enters the reasoning. An unexplained central variable is a
-warning: test a competitor that uses it.
-
-As soon as one defensible candidate exists, save it atomically with
-`python /harbor/skills/stbench-skill/scripts/response_guard.py write`. Replace it only
-when evidence changes the answer.
-
-## 2. Select exactly one primary domain adapter
-
-Read only the matching reference, plus `references/answer_contracts.md` when needed:
-
-- CS/AI: `references/computer_science_ai.md`
-- Chemistry: `references/chemistry.md`
-- Engineering/physics: `references/engineering_physics.md`
-- Image-dependent: first `references/images.md`, then one subject adapter
-- Factual recall or mixed: `references/factual_mixed.md`
-- Broader or unlisted subject: `references/other_domains.md`
-
-The shared outer sequence is:
-
-`parse → ledger → domain derivation → candidate → deterministic checks → attack →`
-`skeptical review → confidence → exact format → save and validate`.
-
-The middle derivation must follow the selected adapter. Do not force every subject into
-one mathematical template, and do not use scripts to invent definitions, reaction
-models, physical laws, factual knowledge, or image meaning.
-
-## 3. Match proof obligations to the request
-
-- Existence/sufficiency: give a permitted construction or witness.
-- Necessity: prove every permitted solution obeys the restriction.
-- Minimum/maximum: label each bound. A construction proves only achievability; an
-  impossibility proves the opposite bound; only matching bounds prove the optimum.
-- Uniqueness: establish injectivity or seek two distinct allowed states with identical
-  observations that require different outputs.
-- Classification/multiple choice: solve independently, normalize equivalent forms,
-  test every option, and identify the strongest competitor.
-- Numerical/symbolic: derive the expression before computing and substitute back.
-- Proof: audit quantifiers and boundary cases.
-- Short exact/factual: give one exact result and separate recall from inference.
-
-Showing that an answer works never proves it is minimal. Prove necessity separately
-from sufficiency. Before a pigeonhole argument, establish whether resources are
-class-owned or shared information sources.
-
-## 4. Attack the leading candidate
-
-Assume it is wrong. Find the first unsupported inference and the strongest competing
-answer. Test the most discriminating applicable challenge: counterexample, alternate
-interpretation, unused variable, hidden assumption, equivalent form, unit/sign error,
-or zero, one-dimensional, limiting, degenerate, equality, and boundary cases. Search
-for reflection, sign, permutation, scaling, translation, and coordinate ambiguities.
-If a counterexample survives, reject or revise the candidate.
-
-For geometry/identifiability, write observation equations, eliminate shared terms,
-check rank or affine independence, and seek two states with the same observations.
-Squared-distance differences can become linear and reflection across a deficient
-affine hull can show ambiguity, but only under matching model and quantifier
-assumptions. Geometry plus dimension is not an automatic formula.
-
-## 5. Run one skeptical review and deterministic batch
-
-Perform the internal reviewer pass in `references/reviewer_protocol.md`. It must attack,
-not paraphrase, the derivation. Put its structured record and all justified mechanical
-checks in `/logs/agent/hle_review.json`, then prefer one call:
-
-When more than one helper might apply, call the router first with the structured
-classification (never raw question text):
+Internally identify the exact requested object, answer format, important variables,
+conditions, and strongest plausible answer. Your next action after reading the task
+must save that candidate:
 
 ```bash
-python /harbor/skills/stbench-skill/scripts/tool_router.py route \
-  --domain DOMAIN --task-type TYPE[,TYPE] --answer-type ANSWER_TYPE \
-  --has-image true|false --features FEATURE[,FEATURE]
+python /harbor/skills/stbench-skill/scripts/response_guard.py write \
+  --explanation 'BRIEF CURRENT BASIS' --answer 'ONE EXACT ANSWER' --confidence N
 ```
 
-It returns ordered recommendations, required inputs, stopping conditions, misuse risks,
-review checks, warnings, and a concise plan—not an answer. Use only the smallest
-recommended set that can separate plausible candidates, and stop tool use once that
-uncertainty is resolved. For an already structured JSON specification use
-`tool_router.py suggest --spec problem_spec.json`.
+This is provisional. Replace it once only if later evidence changes the conclusion.
 
-```bash
-python /harbor/skills/stbench-skill/scripts/hle_review.py \
-  --input /logs/agent/hle_review.json
-```
+## 2. Route by evidence type
 
-The dispatcher routes exact arithmetic, finite search, code/graph/recurrence checks,
-formula and stoichiometry checks, matrices, dimensions/units, residuals, boundaries,
-seeded counterexample sampling, image metadata/preprocessing where available, and
-answer-format checks. It validates consequences of the learner's selected model; it
-does not semantically solve arbitrary expert questions. Use single-purpose helpers only
-when one isolated check is enough.
+Choose one primary route. Do not apply a universal proof template.
 
-## 6. Calibrate confidence
+### Mechanically verifiable
 
-Confidence follows completed evidence, never prose fluency:
+Use this for derivations, calculations, finite cases, code traces, matrices, units,
+stoichiometry, or reversible transforms. Derive the governing model yourself, then run
+the one deterministic check most likely to distinguish the leading answer from its
+competitor. Read one matching domain reference only if needed:
 
-- missing required necessity/minimality or uniqueness check: maximum 55%;
-- central unexplained variable: maximum 50%;
-- unresolved unit or sign convention: maximum 60%;
-- unverified image detail central to the answer: maximum 65%;
-- surviving counterexample: reject and revise;
-- direct derivation plus independent check, no material assumption: 95–100%;
-- strong derivation with minor recall/interpretation risk: 80–94%.
+- `references/computer_science_ai.md`
+- `references/chemistry.md`
+- `references/engineering_physics.md`
 
-Below 80%, perform one additional discriminating check, then submit the strongest
-supported answer rather than loop.
+Relevant offline helpers are under `scripts/`: `exact_math.py`, `finite_search.py`,
+`matrix_check.py`, `text_transform.py`, `cs_check.py`, `chem_check.py`, and
+`engineering_check.py`. They verify consequences of a chosen model; they do not prove
+that the model is the right interpretation. Use `tool_router.py` only when two or more
+helpers genuinely fit and you cannot select the smallest one directly. Stop after the
+discriminating uncertainty is resolved.
 
-## 7. Enforce the answer contract and deliver
+If two or more already-justified mechanical checks must be batched, `hle_review.py` may
+execute them once. Its approval is structural only and must never be cited as semantic
+verification.
 
-Follow `references/answer_contracts.md`. For multiple choice, return the exact requested
-label and requested text; for exact match, normalize units, notation, capitalization,
-precision, and ordering, and remove alternatives. Keep `Answer:` independently
-extractable.
+For an exact minimum or maximum, label the two directions: a construction proves only
+achievability; a separate impossibility argument proves the opposite bound; only
+matching bounds prove the optimum. For uniqueness, seek two distinct allowed states
+with identical observations. Test unused variables, symmetry, reflection, sign,
+permutation, scaling, zero, degenerate, boundary, and limiting cases when relevant.
 
-Unless the task explicitly requires a stricter schema, write exactly:
+### Factual or source-dependent
+
+No local calculator can verify paper-specific classifications, attributions, named
+results, dates, or other source facts. Do not manufacture tool activity or call
+self-review “verification.” Compare plausible recalls, audit qualifiers and scope, and
+choose the best-supported exact answer. Without source evidence, confidence is at most
+60%.
+
+### Conceptual or interpretive
+
+For definitions, analogies, philosophy, or wording such as “most plausible,” compare
+formal correctness with the standard disciplinary interpretation and likely test-author
+intent. Do not treat an analogy as entailment or a coherent story as proof. Check that
+any named object is well-defined before deriving its properties.
+
+For multiple choice, build this compact table internally before committing:
+
+`option | literal fit | standard/author-intent fit | explains all details | fatal flaw`
+
+Evaluate every option. The strongest competitor must receive its best interpretation,
+not a convenient weak one. When a credible competitor remains and no external or
+mechanical evidence separates it, confidence is at most 65%.
+
+Read `references/answer_contracts.md` for ambiguous multiple-choice or exact-match
+contracts and `references/factual_mixed.md` for factual/mixed tasks.
+
+### Image-dependent
+
+Read `references/images.md`. Inspect the complete image once, then at most one bounded
+crop/enlargement with `image_prepare.py` when necessary. Separate visible evidence from
+inference and route that evidence to the appropriate subject method. If a central image
+detail remains unverified, confidence is at most 65%.
+
+For mathematics, biology, earth/space science, social science, humanities/law, or an
+unlisted subject, read `references/other_domains.md` only when its scope warnings matter.
+
+## 3. One adversarial pass
+
+Assume the saved answer is wrong. Ask only:
+
+1. What is the first unsupported premise?
+2. What is the strongest competing answer under its best interpretation?
+3. What single fact, definition, calculation, counterexample, or wording cue separates
+   them?
+
+Run one check if it can create genuinely new evidence. Otherwise make the comparison
+directly and acknowledge the unresolved premise in confidence. Do not create JSON,
+mark your own derivation “passed,” or use `hle_review.py` as semantic certification.
+Self-review is adversarial reconsideration, not independent verification.
+
+## 4. Final answer and stop
+
+If the leader changes, replace the provisional response once. Preserve requested
+labels, units, precision, capitalization, ordering, and transformation direction. Put
+one independently extractable result in `Answer:`; include option text only if asked.
+
+Unless the task requires a stricter format, use exactly:
 
 ```text
-Explanation: <concise decisive reasoning>
+Explanation: <concise decisive basis>
 Answer: <one exact answer>
 Confidence: <integer from 0% to 100%>
 ```
 
-Task-specific formatting overrides this default; use the response guard's raw mode.
-Make final validation the last tool action. Do not continue exploring after the review
-passes and the saved response validates.
+Use `response_guard.py write-raw` when the task requires another schema. Make
+`response_guard.py validate` (or `--schema nonempty`) the final tool call, then finish.
+Do not continue exploring after validation.

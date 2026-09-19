@@ -84,7 +84,9 @@ uv run stbench optimize --domain health \
 
 This command makes additional model calls and benchmark runs, so start small. See
 [`richard_metholody.md`](richard_metholody.md) for the design, safety constraints,
-selection rule, and run artifacts.
+selection rule, and run artifacts. Deterministic experiment utilities for paired
+statistics, safety gates, candidate diversity, leakage checks, provenance, and budgeting
+are documented in [`docs/OPTIMIZER_TOOLS.md`](docs/OPTIMIZER_TOOLS.md).
 For the sequential finance reviewer/worker loop, see [`docs/FINANCE_LOOP.md`](docs/FINANCE_LOOP.md).
 
 ## Scoring

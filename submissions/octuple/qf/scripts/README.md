@@ -1,0 +1,12 @@
+# QF toolkit usage
+
+`qf_tool.py` is offline and deterministic. It uses only the standard library; its numerical helpers accept ordinary sequences and can be imported into `/app/solution.py`.
+
+- `route`: returns the smallest relevant helper/check set for families/features/outputs. It does not choose a financial model.
+- `inspect PATH`: bounded CSV/JSON schema, shape, date-like range, null/non-finite, and JSON key/type inspection.
+- `validate OUTPUT_DIR --required ...`: parses artifacts, rejects non-finite values, and can rerun a solution command to compare hashes.
+- `selftest`: fast embedded checks.
+
+Run fuller tests with `python /harbor/skills/stbench-skill/scripts/test_qf_tool.py`.
+
+Imports cover returns/performance, covariance/correlation, weights/matrices, Black–Scholes/parity, historical VaR/ES, HMM/transitions, inclusive date windows, strict JSON, and fingerprints. Always pass contract conventions (`ddof`, periods, tail/confidence, interpolation/sign); defaults are not claims about a task.

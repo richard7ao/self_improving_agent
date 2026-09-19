@@ -188,6 +188,10 @@ def review(payload: dict[str, Any]) -> dict[str, Any]:
 
     requested = max(0, min(100, int(payload.get("confidence", 0))))
     caps: list[int] = []
+    evidence_type = str(payload.get("evidence_type", "self_report_only"))
+    independent_evidence = bool(payload.get("independent_evidence", False)) or any(
+        check["pass"] for check in checks
+    )
     if necessity_required and status(payload.get("necessity")) != "passed":
         caps.append(55)
     if uniqueness_required and status(payload.get("uniqueness")) != "passed":
@@ -198,10 +202,18 @@ def review(payload: dict[str, Any]) -> dict[str, Any]:
         caps.append(60)
     if image_central and not payload.get("image_detail_verified", False):
         caps.append(65)
+    if evidence_type in {"source_unverified", "analogy"}:
+        caps.append(60)
+    if evidence_type == "conceptual" and payload.get("credible_competitor", True):
+        caps.append(65)
+    if not independent_evidence and evidence_type == "self_report_only":
+        caps.append(70)
     if surviving:
         caps.append(0)
     calibrated = min([requested, *caps])
     corrected = payload.get("corrected_answer")
+    structurally_complete = not objections
+    mechanical_checks_pass = all(check["pass"] for check in checks)
     return {
         "task_classification": {key: route[key] for key in ("domain", "task_types", "answer_type", "has_image", "features")},
         "tool_plan": route["human_plan"], "proposed_answer": payload.get("proposed_answer"),
@@ -215,24 +227,31 @@ def review(payload: dict[str, Any]) -> dict[str, Any]:
         "final_answer": corrected if corrected not in (None, "") else payload.get("proposed_answer"),
         "requested_confidence": requested, "confidence_caps": caps,
         "calibrated_confidence": calibrated, "final_format_status": "present" if isinstance(payload.get("final_format"), dict) else "missing",
-        "warnings": route["warnings"], "approved": not objections,
+        "evidence_type": evidence_type, "independent_evidence_present": independent_evidence,
+        "semantic_verification": False,
+        "semantic_warning": "This report checks structure and deterministic consequences, not whether the central premise is true.",
+        "warnings": route["warnings"], "structurally_complete": structurally_complete,
+        "mechanical_checks_pass": mechanical_checks_pass,
     }
 
 
 class SelfTests(unittest.TestCase):
-    def test_approved_and_confidence_caps(self) -> None:
+    def test_structural_status_and_confidence_caps(self) -> None:
         base = {"classification": {"domain": "engineering_physics", "task_types": ["minimum"], "answer_type": "expression", "has_image": False, "features": ["matrix", "rank"]},
                 "interpreted_question": "exact minimum under stated model", "proposed_answer": "k", "strongest_competitor": "k-1",
                 "variables": [{"name": "d", "explained": True}], "assumptions": [], "conventions": [],
                 "derivation": {"status": "passed"}, "sufficiency": {"status": "passed"}, "necessity": {"status": "passed"},
                 "uniqueness": {"status": "not_applicable"}, "counterexamples_attempted": [{"kind": "boundary", "outcome": "refuted"}],
                 "confidence": 88, "final_format": {"kind": "expression"}, "checks": []}
-        self.assertTrue(review(base)["approved"])
+        complete = review(base)
+        self.assertTrue(complete["structurally_complete"])
+        self.assertFalse(complete["semantic_verification"])
+        self.assertEqual(complete["calibrated_confidence"], 70)
         broken = json.loads(json.dumps(base))
         broken["necessity"] = {"status": "missing"}
         broken["variables"][0]["explained"] = False
         result = review(broken)
-        self.assertFalse(result["approved"])
+        self.assertFalse(result["structurally_complete"])
         self.assertEqual(result["calibrated_confidence"], 50)
 
     def test_dispatches_domain_check(self) -> None:
@@ -253,7 +272,7 @@ def main() -> int:
     payload = json.loads(args.input.read_text(encoding="utf-8"))
     result = review(payload)
     print(json.dumps(result, indent=2))
-    return 0 if result["approved"] else 1
+    return 0 if result["structurally_complete"] and result["mechanical_checks_pass"] else 1
 
 
 if __name__ == "__main__":
