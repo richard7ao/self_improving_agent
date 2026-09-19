@@ -57,6 +57,11 @@ class Split:
     validation: list[str]
 
 
+def _delivery_failures(result: dict) -> int:
+    """Return undelivered outputs; these invalidate comparison as infrastructure failures."""
+    return int(result.get("delivery", {}).get("empty_outputs_total", 0) or 0)
+
+
 def make_split(names: list[str], validation_fraction: float, seed: int) -> Split:
     if not names:
         raise ValueError("optimization needs at least one task")
@@ -435,6 +440,12 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
                         return {"status": "evaluation_failed", "index": index, "path": str(path),
                                 "rationale": rationale, "confidence": confidence,
                                 "calculations": calculations, "error": str(error)}
+                empty_outputs = _delivery_failures(result)
+                if empty_outputs:
+                    return {"status": "delivery_failed", "index": index, "path": str(path),
+                            "rationale": rationale, "confidence": confidence,
+                            "calculations": calculations, "empty_outputs": empty_outputs,
+                            "error": "candidate produced one or more empty response files"}
                 return {"status": "scored", "index": index, "path": str(path),
                         "rationale": rationale, "confidence": confidence,
                         "calculations": calculations, "tune_score": _rate(result), "result": result}
@@ -452,6 +463,18 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
                 cfg, domain_name, challenger_path, round_dir / "validation", split.validation,
                 upstream_base_url, upstream_key, concurrency,
             )
+            validation_empty_outputs = _delivery_failures(challenger_validation)
+            if validation_empty_outputs:
+                challenger.update({
+                    "status": "delivery_failed",
+                    "empty_outputs": validation_empty_outputs,
+                    "error": "candidate produced one or more empty validation response files",
+                })
+                state["last_failure"] = {"round": round_index, "candidates": records}
+                state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+                raise RuntimeError(
+                    f"round {round_index}: selected candidate failed response delivery during validation"
+                )
             challenger_score = _aggregate(challenger["result"], challenger_validation, split)
             promoted = challenger_score > incumbent_score + min_improvement
             if promoted:

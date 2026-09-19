@@ -36,6 +36,19 @@ def write_placebo(placebo_dir: Path) -> Path:
     return placebo_dir
 
 
+def delivery_summary(rows: list[dict], arms: list[str]) -> dict:
+    """Count missing grader inputs separately from answer-quality scores."""
+    empty_by_arm = {
+        arm: sum(1 for row in rows if row.get("arm") == arm and not str(row.get("answer", "")).strip())
+        for arm in arms
+    }
+    return {
+        "empty_outputs_by_arm": empty_by_arm,
+        "empty_outputs_total": sum(empty_by_arm.values()),
+        "note": "empty answers are delivery failures, not evidence about prompt quality",
+    }
+
+
 async def _attempt_with_retries(task: Task, skill_dir: Path | None, sem: asyncio.Semaphore, *,
                                 registry: AttemptTagRegistry | None, tags: dict, **run_kw) -> dict:
     """One scored attempt; retries infrastructure failures, never a wrong answer."""
@@ -159,6 +172,7 @@ async def run_eval(cfg: HackathonCfg, domain_name: str, *, skill_dir: str | Path
         "tasks": names,
         "summary": summary,
         "per_task": [{**r, "task_name": by_id.get(r["task_id"], r["task_id"])} for r in summary["per_task"]],
+        "delivery": delivery_summary(rows, arms),
         "learner_usage": learner_meter.usage(),
         "learner_cost": learner_ledger.summary()["cost"],
         "grader_usage": aux_meter.usage() if aux_meter else None,

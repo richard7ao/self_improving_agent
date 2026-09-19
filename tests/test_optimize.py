@@ -10,6 +10,7 @@ from skilltrainbench.config import load_config
 from skilltrainbench.optimize import (
     Split,
     _aggregate,
+    _delivery_failures,
     _parse_object,
     _reject_task_copy,
     _safe_relative,
@@ -95,6 +96,14 @@ class OptimizeTests(unittest.IsolatedAsyncioTestCase):
         validation = {"summary": {"skill_rate": 0.5}}
         split = Split(tune=["a", "b", "c"], validation=["d"])
         self.assertEqual(_aggregate(tune, validation, split), 0.6875)
+
+    def test_delivery_failures_are_separate_from_quality_score(self):
+        result = {
+            "summary": {"skill_rate": 0.9},
+            "delivery": {"empty_outputs_total": 2},
+        }
+        self.assertEqual(_delivery_failures(result), 2)
+        self.assertEqual(_delivery_failures({"summary": {"skill_rate": 0.0}}), 0)
 
     async def test_loop_promotes_best_candidate_and_discards_variants(self):
         cfg = load_config()
