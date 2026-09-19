@@ -28,6 +28,23 @@ are consolidated. Credentials, datasets, and detailed run artifacts remain ignor
 Doctor confirms Docker, API authentication, and all 54 QF tasks; the full-dataset
 check fails because other domains have not been downloaded.
 
+## Live numerical correctness fix
+
+The original Black–Scholes helper lost representable tail probabilities through
+`1 + erf(...)` cancellation. For synthetic spot 100, strike 600, maturity 1,
+rate 0, and volatility 0.2, the old call price was zero. The stable `erfc` form
+returns **8.721049889482367e-19**, agreeing with independent payoff-density
+quadrature (**8.721049889095937e-19**) within 1e-8 relative tolerance. Put delta
+now uses the opposite tail directly instead of subtracting one from a rounded CDF.
+
+The live fix preserves the base and adds a regression covering numerical integration,
+call/put symmetry, and finite-difference put delta. All **15 toolkit tests** and
+**44 repository tests** pass. Static skill validation, offline script audit,
+54-instruction exact-overlap scan, and diff checks pass. Live digest:
+`6d52283695d180f4529e927cbcf9bf31f8fad74003e8969ac3dc679a3926ad51`.
+This is a verified numerical improvement; no benchmark score gain is attributed
+to this helper change. The timing candidate remains separately reproducible.
+
 ## Tested engineering changes
 
 - QF is graded from generated artifacts. Empty textual answers no longer become

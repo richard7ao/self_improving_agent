@@ -77,6 +77,30 @@ class QFToolTests(unittest.TestCase):
         self.assertAlmostEqual(residual, 0, places=11)
         self.assertGreater(c["gamma"], 0)
 
+    def test_black_scholes_tail_price_matches_payoff_integration(self):
+        # Independent normal-density integration, avoiding any CDF implementation.
+        spot, strike, sigma = 100.0, 600.0, 0.2
+        boundary = (math.log(strike / spot) + sigma ** 2 / 2) / sigma
+        steps, width = 10000, 8.0
+        h = width / steps
+        def payoff_density(z):
+            payoff = strike * math.expm1(sigma * (z - boundary))
+            return payoff * math.exp(-z * z / 2) / math.sqrt(2 * math.pi)
+        expected = h / 3 * (payoff_density(boundary) + payoff_density(boundary + width)
+            + math.fsum((4 if i % 2 else 2) * payoff_density(boundary + i * h)
+                        for i in range(1, steps)))
+        actual = q.black_scholes(spot, strike, 1, 0, sigma)["price"]
+        self.assertGreater(actual, 0)
+        self.assertTrue(math.isclose(actual, expected, rel_tol=1e-8))
+        # With zero rates, swapping spot/strike exchanges call and put prices.
+        put = q.black_scholes(strike, spot, 1, 0, sigma, "put")
+        self.assertTrue(math.isclose(put["price"], expected, rel_tol=1e-8))
+        step = 0.01
+        derivative = (q.black_scholes(strike + step, spot, 1, 0, sigma, "put")["price"]
+                      - q.black_scholes(strike - step, spot, 1, 0, sigma, "put")["price"]) / (2 * step)
+        self.assertLess(put["delta"], 0)
+        self.assertTrue(math.isclose(put["delta"], derivative, rel_tol=1e-6))
+
     def test_transition_and_hmm_normalization(self):
         self.assertEqual(q.normalize_probabilities([2, 3]), [.4, .6])
         self.assertTrue(q.transition_diagnostics([[.8, .2], [0, 1]], absorbing_index=1)["ok"])

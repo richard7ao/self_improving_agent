@@ -183,7 +183,8 @@ def quadratic_form(weights: Sequence[float], matrix: Sequence[Sequence[float]]) 
 
 
 def _normal_cdf(x: float) -> float:
-    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+    # erfc preserves small tail probabilities that 1 + erf rounds to zero.
+    return 0.5 * math.erfc(-x / math.sqrt(2.0))
 
 
 def _normal_pdf(x: float) -> float:
@@ -205,7 +206,7 @@ def black_scholes(spot: float, strike: float, maturity: float, rate: float,
         delta = dq * _normal_cdf(d1)
     else:
         price = strike * dr * _normal_cdf(-d2) - spot * dq * _normal_cdf(-d1)
-        delta = dq * (_normal_cdf(d1) - 1.0)
+        delta = -dq * _normal_cdf(-d1)
     gamma = dq * _normal_pdf(d1) / (spot * sigma * root_t)
     vega = spot * dq * _normal_pdf(d1) * root_t
     return {"price": price, "delta": delta, "gamma": gamma, "vega_per_unit_vol": vega,
