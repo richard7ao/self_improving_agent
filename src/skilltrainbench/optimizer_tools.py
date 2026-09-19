@@ -24,6 +24,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
+from .tasks import requires_text_answer
+
 
 _TOKEN = re.compile(r"[a-z0-9_]+")
 _BLOCKED_IMPORTS = frozenset({
@@ -250,10 +252,10 @@ def classify_attempts(rows: Iterable[Mapping], *, low_score: float = 0.5) -> dic
         answer = str(row.get("answer") or "").strip()
         score = row.get("score")
         status = row.get("status")
-        if not answer:
-            failure = "delivery_failure"
-        elif status not in (None, "ok", "invalid_output"):
+        if status not in (None, "ok", "invalid_output"):
             failure = "infrastructure_failure"
+        elif requires_text_answer(row) and not answer:
+            failure = "delivery_failure"
         elif score is None:
             failure = "invalidated_or_ungraded"
         elif float(score) < low_score:

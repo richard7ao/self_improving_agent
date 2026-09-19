@@ -68,6 +68,18 @@ FRACTIONAL = frozenset({"healthbench"})
 PASS_REWARD = 1.0
 
 
+def requires_text_answer(row: dict, benchmark: str | None = None) -> bool:
+    """Only HealthBench exports graded text into the attempt's answer field.
+
+    Infer older records from their task IDs; untyped legacy records retain the
+    original text-delivery behavior. Other domains are judged by the verifier.
+    """
+    kind = benchmark or row.get("benchmark")
+    if not kind:
+        kind = str(row.get("task_id", "")).split("-train-", 1)[0]
+    return kind not in {"qfbench", "tau3bench", "hlebench"}
+
+
 @dataclass(frozen=True)
 class Task:
     id: str

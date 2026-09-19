@@ -18,7 +18,7 @@ from . import harbor
 from .config import HackathonCfg, learner_settings, task_names
 from .gateway import AttemptTagRegistry, BudgetMeter, Ledger, LocalGatewayServer, build_app, fetch_prices, tagged
 from .scoring import Pair, summarize
-from .tasks import Task, is_pass, load_task, score
+from .tasks import Task, is_pass, load_task, requires_text_answer, score
 
 ARMS = ("baseline", "placebo", "skill")
 _RETRY_DELAYS = (0.5, 2.0, 5.0)  # transient upstream/Docker failures often clear within seconds
@@ -36,16 +36,19 @@ def write_placebo(placebo_dir: Path) -> Path:
     return placebo_dir
 
 
-def delivery_summary(rows: list[dict], arms: list[str]) -> dict:
+def delivery_summary(rows: list[dict], arms: list[str], *, benchmark: str | None = None) -> dict:
     """Count missing grader inputs separately from answer-quality scores."""
     empty_by_arm = {
-        arm: sum(1 for row in rows if row.get("arm") == arm and not str(row.get("answer", "")).strip())
+        arm: sum(1 for row in rows if row.get("arm") == arm
+                 and requires_text_answer(row, benchmark)
+                 and not str(row.get("answer") or "").strip())
         for arm in arms
     }
     return {
         "empty_outputs_by_arm": empty_by_arm,
         "empty_outputs_total": sum(empty_by_arm.values()),
-        "note": "empty answers are delivery failures, not evidence about prompt quality",
+        "note": "empty text answers are delivery failures only for text-delivery tasks; "
+                "other domains use verifier outcomes",
     }
 
 
@@ -137,7 +140,8 @@ async def run_eval(cfg: HackathonCfg, domain_name: str, *, skill_dir: str | Path
                                "an upstream/gateway/Docker problem, not a learner mistake"
                                f"\n  error_class: {attempt.get('error_class')}"
                                + (f"\n  harbor stderr (tail):\n{detail}" if detail else ""))
-        rows.append({"task_id": task.id, "task_name": task.name, "arm": arm, "score": value,
+        rows.append({"task_id": task.id, "task_name": task.name, "benchmark": task.benchmark,
+                     "arm": arm, "score": value,
                      "passed": None if value is None else is_pass(value), "answer": attempt.get("answer", ""),
                      "status": attempt.get("status"), "trial_dir": attempt.get("artifacts", {}).get("trial_dir")})
         return value
@@ -172,7 +176,7 @@ async def run_eval(cfg: HackathonCfg, domain_name: str, *, skill_dir: str | Path
         "tasks": names,
         "summary": summary,
         "per_task": [{**r, "task_name": by_id.get(r["task_id"], r["task_id"])} for r in summary["per_task"]],
-        "delivery": delivery_summary(rows, arms),
+        "delivery": delivery_summary(rows, arms, benchmark=domain.benchmark),
         "learner_usage": learner_meter.usage(),
         "learner_cost": learner_ledger.summary()["cost"],
         "grader_usage": aux_meter.usage() if aux_meter else None,

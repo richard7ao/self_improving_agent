@@ -66,6 +66,18 @@ class OptimizerToolsTests(unittest.TestCase):
         ])
         self.assertEqual(result["counts"], {"delivery_failure": 1, "low_score": 1, "pass": 1})
 
+    def test_empty_answer_does_not_hide_infrastructure_errors(self):
+        result = classify_attempts([
+            {"task_id": "qfbench-train-failed", "answer": "", "score": None, "status": "infra_error"},
+            {"task_id": "healthbench-train-failed", "answer": "", "score": None, "status": "timeout"},
+        ])
+        self.assertEqual(result["counts"], {"infrastructure_failure": 2})
+
+    def test_qf_submission_passes_candidate_script_audit(self):
+        skill = Path(__file__).resolve().parents[1] / "submissions/octuple/qf"
+        result = audit_generated_scripts(skill)
+        self.assertTrue(result["ok"], result)
+
     def test_paired_statistics_and_promotion_gate(self):
         incumbent_tune = {"a": 0.2, "b": 0.3, "c": 0.4}
         challenger_tune = {"a": 0.5, "b": 0.6, "c": 0.7}

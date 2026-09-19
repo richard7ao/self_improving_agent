@@ -164,6 +164,35 @@ class OptimizeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(_delivery_failures(result), 2)
         self.assertEqual(_delivery_failures({"summary": {"skill_rate": 0.0}}), 0)
 
+    def test_legacy_qf_empty_answer_counts_do_not_block_candidates(self):
+        for identity in ({"domain": "qf"}, {"benchmark": "qfbench"}):
+            self.assertEqual(_delivery_failures({**identity, "delivery": {"empty_outputs_total": 2}}), 0)
+        self.assertEqual(_delivery_failures({"domain": "health", "delivery": {"empty_outputs_total": 2}}), 2)
+
+    def test_qf_review_preserves_verifier_and_runtime_outcomes(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            rows = [
+                {"task_name": "pass", "answer": "", "score": 1.0, "status": "ok"},
+                {"task_name": "wrong", "answer": "", "score": 0.0, "status": "ok"},
+                {"task_name": "infra", "answer": "", "score": None, "status": "infra_error"},
+                {"task_name": "held-back", "answer": "", "score": 1.0, "status": "ok"},
+            ]
+            (root / "attempts.jsonl").write_text("\n".join(json.dumps(row) for row in rows))
+            evidence = json.loads(_observations(root, {"benchmark": "qfbench"},
+                                                {name: {} for name in ("pass", "wrong", "infra")}))
+            self.assertEqual(evidence["failure_summary"]["counts"],
+                             {"pass": 1, "low_score": 1, "infrastructure_failure": 1})
+            self.assertEqual(len(evidence["attempts"]), 3)
+
+    def test_qf_toolkit_can_be_materialized_as_candidate(self):
+        skill = Path(__file__).resolve().parents[1] / "submissions/octuple/qf"
+        files = [{"path": p.relative_to(skill).as_posix(), "content": p.read_text()}
+                 for p in skill.rglob("*") if p.is_file() and p.suffix in {".md", ".py"}]
+        with tempfile.TemporaryDirectory() as raw:
+            materialize_candidate({"files": files, "rationale": "compatibility check"},
+                                  Path(raw) / "candidate", load_config())
+
     async def test_loop_promotes_best_candidate_and_discards_variants(self):
         cfg = load_config()
         with tempfile.TemporaryDirectory() as raw:

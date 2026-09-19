@@ -71,6 +71,9 @@ class Split:
 
 def _delivery_failures(result: dict) -> int:
     """Return undelivered outputs; these invalidate comparison as infrastructure failures."""
+    # Older QF/HLE/tau3 reports counted intentionally unpopulated text fields.
+    if result.get("benchmark") in {"qfbench", "hlebench", "tau3bench"} or result.get("domain") in {"qf", "hle", "tau3"}:
+        return 0
     return int(result.get("delivery", {}).get("empty_outputs_total", 0) or 0)
 
 
@@ -267,6 +270,8 @@ def _observations(eval_dir: Path, result: dict, task_context: dict[str, object])
             if row.get("task_name") not in task_context:
                 continue
             attempts.append({
+                "task_id": row.get("task_id"), "status": row.get("status"),
+                "benchmark": row.get("benchmark") or result.get("benchmark"),
                 "task_name": row.get("task_name"), "score": row.get("score"),
                 "answer": str(row.get("answer", ""))[:6000],
                 "trajectory": _trajectory_evidence(eval_dir, row.get("trial_dir")),
