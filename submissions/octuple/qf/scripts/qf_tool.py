@@ -11,7 +11,6 @@ import math
 import os
 from pathlib import Path
 import statistics
-import subprocess
 import sys
 from typing import Any, Iterable, Sequence
 
@@ -488,7 +487,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     validate_parser = commands.add_parser("validate")
     validate_parser.add_argument("path")
     validate_parser.add_argument("--required", required=True)
-    validate_parser.add_argument("--compare-command")
+    fingerprint_mode = validate_parser.add_mutually_exclusive_group()
+    fingerprint_mode.add_argument("--write-fingerprint")
+    fingerprint_mode.add_argument("--compare-fingerprint")
     commands.add_parser("selftest")
     args = parser.parse_args(argv)
     try:
@@ -500,16 +501,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "validate":
             required = [x.strip() for x in args.required.split(",") if x.strip()]
             result = validate_outputs(args.path, required)
-            if args.compare_command and result["ok"]:
-                before = directory_fingerprint(args.path)
-                completed = subprocess.run(args.compare_command, shell=True, check=False,
-                                           text=True, capture_output=True, cwd="/app")
-                after = directory_fingerprint(args.path)
-                result["rerun"] = {"returncode": completed.returncode,
-                                   "stdout_tail": completed.stdout[-2000:],
-                                   "stderr_tail": completed.stderr[-2000:],
-                                   "identical": before == after}
-                result["ok"] = result["ok"] and completed.returncode == 0 and before == after
+            fingerprint_path = args.write_fingerprint or args.compare_fingerprint
+            if fingerprint_path and result["ok"]:
+                snapshot = Path(fingerprint_path).resolve()
+                if snapshot.is_relative_to(Path(args.path).resolve()):
+                    raise ValueError("fingerprint must be stored outside the output directory")
+                current = directory_fingerprint(args.path)
+                if args.write_fingerprint:
+                    write_json_strict(snapshot, current)
+                    result["fingerprint_written"] = str(snapshot)
+                else:
+                    before = json.loads(snapshot.read_text(encoding="utf-8"))
+                    identical = before == current
+                    result["identical"] = identical
+                    result["ok"] = identical
+                    if not identical:
+                        result["errors"].append("output files differ from saved fingerprint")
         else:
             selftest()
             result = {"ok": True, "tests": "embedded"}

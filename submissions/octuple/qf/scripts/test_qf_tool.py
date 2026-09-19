@@ -4,11 +4,39 @@ import math
 from pathlib import Path
 import tempfile
 import unittest
+from contextlib import redirect_stdout, redirect_stderr
+from io import StringIO
 
 import qf_tool as q
 
 
 class QFToolTests(unittest.TestCase):
+    def test_fingerprint_cli_detects_changed_added_and_removed_outputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "output"
+            root.mkdir()
+            result = root / "result.json"
+            result.write_text('{"value": 1}')
+            extra = root / "extra.csv"
+            extra.write_text('value\n1\n')
+            snapshot = str(Path(tmp) / "before.json")
+            argv = ["validate", str(root), "--required", "result.json"]
+            with redirect_stdout(StringIO()):
+                self.assertEqual(q.main(argv + ["--write-fingerprint", snapshot]), 0)
+                self.assertEqual(q.main(argv + ["--compare-fingerprint", snapshot]), 0)
+                result.write_text('{"value": 2}')
+                self.assertEqual(q.main(argv + ["--compare-fingerprint", snapshot]), 1)
+                result.write_text('{"value": 1}')
+                added = root / "added.csv"
+                added.write_text('value\n2\n')
+                self.assertEqual(q.main(argv + ["--compare-fingerprint", snapshot]), 1)
+                added.unlink()
+                extra.unlink()
+                self.assertEqual(q.main(argv + ["--compare-fingerprint", snapshot]), 1)
+            with redirect_stderr(StringIO()):
+                self.assertEqual(q.main(argv + ["--write-fingerprint", str(root / "bad.json")]), 2)
+            self.assertFalse((root / "bad.json").exists())
+
     def test_returns_conventions(self):
         self.assertAlmostEqual(q.simple_returns([100, 110])[0], 0.1)
         self.assertAlmostEqual(q.log_returns([100, 110])[0], math.log(1.1))

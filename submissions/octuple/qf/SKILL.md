@@ -38,11 +38,16 @@ python /harbor/skills/stbench-skill/scripts/qf_tool.py route \
   --outputs results.json,solution.json
 python /harbor/skills/stbench-skill/scripts/qf_tool.py inspect /app/data
 python /harbor/skills/stbench-skill/scripts/qf_tool.py validate /app/output \
-  --required results.json,solution.json --compare-command 'python /app/solution.py'
+  --required results.json,solution.json --write-fingerprint /app/qf-output-before.json
+python /app/solution.py
+python /harbor/skills/stbench-skill/scripts/qf_tool.py validate /app/output \
+  --required results.json,solution.json --compare-fingerprint /app/qf-output-before.json
 python /harbor/skills/stbench-skill/scripts/qf_tool.py selftest
 ```
 
 Import helpers from [scripts/qf_tool.py](scripts/qf_tool.py) rather than rewriting them. It covers return/performance, matrix/portfolio, pricing, risk, HMM, date-window, and strict artifact checks. Read [scripts/README.md](scripts/README.md) for CLI/import contracts. Run [scripts/test_qf_tool.py](scripts/test_qf_tool.py) after adapting toolkit code; it does not replace task tests.
+
+Use the task's actual output path and filenames in these commands. Store fingerprints outside the output directory and rerun the solution with the agent's terminal tool; the toolkit never executes commands. Check exact schemas and financial identities separately: generic validation checks file presence, parsing, and finiteness only.
 
 ## Completion checks
 
