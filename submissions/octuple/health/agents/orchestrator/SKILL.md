@@ -9,6 +9,13 @@ Classify the request first. Keep a simple question as one task; otherwise create
 non-overlapping specialist subtasks selected from the available role skills. Run independent work in
 parallel when the environment supports subagents.
 
+For a persistent development record, initialize and plan with
+`/harbor/skills/stbench-skill/scripts/orchestration/orchestrate_workspace.py`. Store each assignment
+and result before synthesis. Use `status` to confirm every required result exists and
+`synthesize-check` to block unresolved conflicts or critical flags. See
+`scripts/orchestration/README.md` for exact JSON contracts. The script coordinates files only; the
+orchestration agent remains responsible for dispatching real subagents.
+
 For each assignment provide only the required context, objective, output contract, and limits. Each
 result must contain evidence, concise rationale, assumptions, counterhypothesis, confidence, and
 unresolved concerns. Treat confidence as metadata, not a vote.

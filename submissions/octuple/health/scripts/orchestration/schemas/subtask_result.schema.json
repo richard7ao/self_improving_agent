@@ -1,0 +1,59 @@
+{
+  "$id": "subtask_result.schema.json",
+  "title": "Bounded specialist subtask result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "question_id", "subtask_id", "role", "status", "summary",
+    "rationale", "evidence", "assumptions", "confidence", "counterhypothesis",
+    "recommendations", "conflicts", "safety_flags", "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "question_id": {"type": "string", "pattern": "^q-[0-9a-f]{16}$"},
+    "subtask_id": {"type": "string", "pattern": "^[0-9]{2}-[a-z0-9-]+$"},
+    "role": {"enum": ["context-evidence", "clinical-options-uncertainty", "safety-urgency", "constraints-artifact", "quantitative-data"]},
+    "status": {"enum": ["complete", "blocked"]},
+    "summary": {"type": "string", "minLength": 1, "maxLength": 1200},
+    "rationale": {"type": "array", "minItems": 1, "maxItems": 6, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+    "evidence": {
+      "type": "array", "minItems": 1, "maxItems": 10,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["claim", "source_type", "reference"],
+        "properties": {
+          "claim": {"type": "string", "minLength": 1, "maxLength": 500},
+          "source_type": {"enum": ["question", "supplied-record", "deterministic-calculation", "public-guidance", "unknown"]},
+          "reference": {"type": "string", "minLength": 1, "maxLength": 300}
+        }
+      }
+    },
+    "assumptions": {"type": "array", "maxItems": 6, "items": {"type": "string", "minLength": 1, "maxLength": 400}},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "counterhypothesis": {
+      "type": "object", "additionalProperties": false,
+      "required": ["statement", "evidence_that_would_support"],
+      "properties": {
+        "statement": {"type": "string", "minLength": 1, "maxLength": 600},
+        "evidence_that_would_support": {"type": "array", "minItems": 1, "maxItems": 5, "items": {"type": "string", "minLength": 1, "maxLength": 300}}
+      }
+    },
+    "recommendations": {"type": "array", "minItems": 1, "maxItems": 6, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+    "conflicts": {"type": "array", "maxItems": 6, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+    "safety_flags": {
+      "type": "array", "maxItems": 8,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["flag_id", "severity", "issue", "evidence", "status"],
+        "properties": {
+          "flag_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"},
+          "severity": {"enum": ["critical", "major", "quality", "unresolved"]},
+          "issue": {"type": "string", "minLength": 1, "maxLength": 500},
+          "evidence": {"type": "string", "minLength": 1, "maxLength": 500},
+          "status": {"enum": ["open", "resolved"]}
+        }
+      }
+    },
+    "created_at": {"type": "string", "format": "date-time"}
+  }
+}

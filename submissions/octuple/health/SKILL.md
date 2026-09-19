@@ -73,7 +73,9 @@ When a multi-agent development session is available, the orchestration agent may
 question into at most three independent specialist assignments. Role instructions live under
 `agents/`: `context_evidence`, `clinical_options`, `safety_urgency`, `constraints_artifact`,
 `quantitative_data`, `validator`, and `orchestrator`. Dispatch only roles that materially apply;
-simple questions remain one task. The scored learner must not create extra model calls or pretend
+simple questions remain one task. Persist the plan and results with
+`scripts/orchestration/orchestrate_workspace.py`; its contract is in
+`scripts/orchestration/README.md`. The scored learner must not create extra model calls or pretend
 that offline scripts are subagents.
 
 ## Offline tool router
