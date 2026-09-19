@@ -70,6 +70,22 @@ Useful flags:
 Then change the skill and run again. You can drive this loop with any coding
 agent (Claude Code, Codex, ...): point it at this repo and let it call `stbench eval`.
 
+To run an automated survivor tournament, use `stbench optimize`. It reviews the
+current skill's training failures, generates several complete skill-folder variants,
+scores them on a fixed tune split, validates the strongest challenger on held-back
+training tasks, and promotes it only when its aggregate score improves:
+
+```bash
+uv run stbench optimize --domain health \
+  --skill submissions/my-team/health \
+  --out runs/health-opt-001 \
+  --iterations 2 --candidates 3 --limit 8 --seed 42
+```
+
+This command makes additional model calls and benchmark runs, so start small. See
+[`richard_metholody.md`](richard_metholody.md) for the design, safety constraints,
+selection rule, and run artifacts.
+
 ## Scoring
 
 - Each submitted skill runs on **private held-out tasks** from the same domain in three arms: no skill, a placebo skill, and your skill.

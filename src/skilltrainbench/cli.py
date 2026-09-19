@@ -28,6 +28,25 @@ def main(argv: list[str] | None = None) -> int:
                     help="parallel task containers (default: hackathon.toml; lower it on a laptop for qf/tau3)")
     ev.add_argument("--out", required=True)
     ev.add_argument("--config", default=None, help="hackathon config (default: repo-root hackathon.toml)")
+    op = sub.add_parser("optimize", help="iteratively generate, score, and promote skill variants")
+    op.add_argument("--domain", required=True, help="domain from hackathon.toml")
+    op.add_argument("--skill", required=True, help="live skill folder to improve in place")
+    op.add_argument("--out", required=True, help="run directory for checkpoints and evaluation artifacts")
+    op.add_argument("--iterations", type=int, default=3, help="maximum optimization rounds")
+    op.add_argument("--candidates", type=int, default=3, help="variants generated per round")
+    op.add_argument("--tasks", default="", help="comma-separated training tasks (default: shuffled selection)")
+    op.add_argument("--limit", type=int, default=8, help="total tasks used across tune and validation")
+    op.add_argument("--validation-fraction", type=float, default=0.25)
+    op.add_argument("--min-improvement", type=float, default=0.0,
+                    help="minimum aggregate score gain required for promotion")
+    op.add_argument("--seed", type=int, default=0, help="reproducible task split and generation seed")
+    op.add_argument("--optimizer-model", default=None,
+                    help="review/changer model (default: the pinned learner model)")
+    op.add_argument("--concurrency", type=int, default=None, help="parallel task containers per evaluation")
+    op.add_argument("--candidate-parallelism", type=int, default=None,
+                    help="candidate evaluations run at once (default: auto within container concurrency)")
+    op.add_argument("--keep-candidates", action="store_true", help="retain losing skill folders for debugging")
+    op.add_argument("--config", default=None)
     ck = sub.add_parser("check-skill", help="static submission checks for a skill folder")
     ck.add_argument("skill")
     ck.add_argument("--config", default=None)
@@ -87,6 +106,25 @@ def _run(args) -> int:
         print("WARNING: this Docker daemon's kernel cannot enforce network allowlists (Docker Desktop lacks "
               "CONFIG_NFT_FIB_INET), so task containers run with public egress here. Scored runs on the "
               "organizers' Linux hosts restrict the learner to the gateway; do not rely on internet access.")
+    if args.cmd == "optimize":
+        from . import optimize
+
+        task_ids = [t.strip() for t in args.tasks.split(",") if t.strip()] or None
+        try:
+            result = asyncio.run(optimize.run_optimization(
+                hcfg, args.domain, skill_dir=args.skill, out=args.out,
+                iterations=args.iterations, candidates=args.candidates, task_ids=task_ids,
+                limit=args.limit, validation_fraction=args.validation_fraction,
+                min_improvement=args.min_improvement, seed=args.seed,
+                optimizer_model=args.optimizer_model, upstream_base_url=base, upstream_key=key,
+                concurrency=args.concurrency, candidate_parallelism=args.candidate_parallelism,
+                keep_candidates=args.keep_candidates,
+            ))
+        except (OSError, ValueError, RuntimeError) as e:
+            print(e)
+            return 2
+        print(optimize.format_optimization(result))
+        return 0
     if args.skill:
         check = config.check_skill(args.skill, hcfg)
         if not check["ok"]:
