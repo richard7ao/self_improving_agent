@@ -144,7 +144,8 @@ def materialize_candidate(payload: dict, destination: Path, cfg: HackathonCfg,
     return rationale if isinstance(rationale, str) else ""
 
 
-async def _chat(client: httpx.AsyncClient, model: str, system: str, user: str, *, seed: int | None) -> str:
+async def _chat(client: httpx.AsyncClient, model: str, system: str, user: str, *,
+                seed: int | None, json_mode: bool = False) -> str:
     body = {
         "model": model,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
@@ -153,6 +154,8 @@ async def _chat(client: httpx.AsyncClient, model: str, system: str, user: str, *
     }
     if seed is not None:
         body["seed"] = seed
+    if json_mode:
+        body["response_format"] = {"type": "json_object"}
     response = None
     for attempt, delay in enumerate((0.0, 1.0, 3.0)):
         if delay:
@@ -276,7 +279,7 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
                            concurrency: int | None,
                            optimizer_base_url: str | None = None, optimizer_key: str | None = None,
                            candidate_parallelism: int | None = None,
-                           keep_candidates: bool = False) -> dict:
+                           keep_candidates: bool = False, resume: bool = False) -> dict:
     if iterations < 1 or candidates < 1:
         raise ValueError("--iterations and --candidates must be positive")
     if min_improvement < 0:
@@ -291,42 +294,70 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
     if not check["ok"]:
         raise ValueError(f"live skill failed static checks: {json.dumps(check)}")
     output = Path(out).expanduser().resolve()
-    if (output / "optimization.json").exists():
+    state_path = output / "optimization.json"
+    if state_path.exists() and not resume:
         raise ValueError(f"optimization output already exists: {output}; choose a new --out directory")
+    if resume and not state_path.is_file():
+        raise ValueError(f"cannot resume without {state_path}")
     output.mkdir(parents=True, exist_ok=True)
-    selected = task_names(domain, task_ids=task_ids)
-    if limit is not None:
-        selected = selected[:max(0, limit)] if task_ids else random.Random(seed).sample(selected, min(limit, len(selected)))
-    split = make_split(selected, validation_fraction, seed)
-    print(f"optimization split: {len(split.tune)} tune · {len(split.validation)} validation tasks")
-    state = {
-        "domain": domain_name, "skill_dir": str(live), "model": optimizer_model or cfg.learner_model,
-        "seed": seed, "split": {"tune": split.tune, "validation": split.validation}, "rounds": [],
-    }
+    if resume:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        if state.get("domain") != domain_name or Path(state.get("skill_dir", "")).resolve() != live:
+            raise ValueError("resume state does not match --domain and --skill")
+        split = Split(tune=list(state["split"]["tune"]), validation=list(state["split"]["validation"]))
+        print(f"resuming optimization: {len(split.tune)} tune · {len(split.validation)} validation tasks")
+    else:
+        selected = task_names(domain, task_ids=task_ids)
+        if limit is not None:
+            selected = (selected[:max(0, limit)] if task_ids else
+                        random.Random(seed).sample(selected, min(limit, len(selected))))
+        split = make_split(selected, validation_fraction, seed)
+        print(f"optimization split: {len(split.tune)} tune · {len(split.validation)} validation tasks")
+        state = {
+            "domain": domain_name, "skill_dir": str(live), "model": optimizer_model or cfg.learner_model,
+            "seed": seed, "split": {"tune": split.tune, "validation": split.validation}, "rounds": [],
+        }
 
     optimizer_base = (optimizer_base_url or upstream_base_url).rstrip("/")
     headers = {"authorization": f"Bearer {optimizer_key or upstream_key}"}
     async with httpx.AsyncClient(base_url=optimizer_base, headers=headers, timeout=600.0) as client:
-        print("evaluating incumbent on tune tasks")
-        incumbent_tune = await _score(cfg, domain_name, live, output / "initial" / "tune",
-                                      split.tune, upstream_base_url, upstream_key, concurrency)
-        print("evaluating incumbent on validation tasks")
-        incumbent_validation = await _score(cfg, domain_name, live, output / "initial" / "validation",
-                                            split.validation, upstream_base_url, upstream_key, concurrency)
-        incumbent_score = _aggregate(incumbent_tune, incumbent_validation, split)
-        state["initial_score"] = incumbent_score
-        state["final_score"] = incumbent_score
-        (output / "optimization.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
-        current_eval_dir = output / "initial" / "tune"
-        current_tune = incumbent_tune
+        if resume:
+            promoted_round = next((item for item in reversed(state.get("rounds", [])) if item.get("promoted")), None)
+            if promoted_round:
+                current_eval_dir = output / f"round-{promoted_round['round']:02d}" / f"eval-candidate-{promoted_round['challenger']:02d}"
+                validation_dir = output / f"round-{promoted_round['round']:02d}" / "validation"
+            else:
+                current_eval_dir = output / "initial" / "tune"
+                validation_dir = output / "initial" / "validation"
+            incumbent_tune = json.loads((current_eval_dir / "eval_result.json").read_text(encoding="utf-8"))
+            incumbent_validation = json.loads((validation_dir / "eval_result.json").read_text(encoding="utf-8"))
+            incumbent_score = float(state["final_score"])
+            current_tune = incumbent_tune
+        else:
+            print("evaluating incumbent on tune tasks")
+            incumbent_tune = await _score(cfg, domain_name, live, output / "initial" / "tune",
+                                          split.tune, upstream_base_url, upstream_key, concurrency)
+            print("evaluating incumbent on validation tasks")
+            incumbent_validation = await _score(cfg, domain_name, live, output / "initial" / "validation",
+                                                split.validation, upstream_base_url, upstream_key, concurrency)
+            incumbent_score = _aggregate(incumbent_tune, incumbent_validation, split)
+            state["initial_score"] = incumbent_score
+            state["final_score"] = incumbent_score
+            state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+            current_eval_dir = output / "initial" / "tune"
+            current_tune = incumbent_tune
         tune_context = _task_context(domain.dataset_dir, split.tune)
         forbidden_texts = _strings(tune_context)
 
-        for round_index in range(1, iterations + 1):
+        for round_index in range(len(state.get("rounds", [])) + 1, iterations + 1):
             print(f"round {round_index}/{iterations}: reviewing failures and generating {candidates} candidates")
             round_dir = output / f"round-{round_index:02d}"
             candidates_dir = round_dir / "candidates"
+            if candidates_dir.exists():
+                shutil.rmtree(candidates_dir)
             candidates_dir.mkdir(parents=True)
+            generated_dir = round_dir / "generated-responses"
+            generated_dir.mkdir(parents=True, exist_ok=True)
             review_input = json.dumps({
                 "skill_files": _skill_files(live),
                 "evaluation": json.loads(_observations(current_eval_dir, current_tune, tune_context)),
@@ -346,7 +377,8 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
                     "review": review,
                 }, ensure_ascii=False)
                 raw = await _chat(client, state["model"], _CHANGE_SYSTEM, prompt,
-                                  seed=seed + round_index * 1000 + index)
+                                  seed=seed + round_index * 1000 + index, json_mode=True)
+                (generated_dir / f"candidate-{index:02d}.txt").write_text(raw, encoding="utf-8")
                 payload = _parse_object(raw)
                 path = candidates_dir / f"candidate-{index:02d}"
                 rationale = materialize_candidate(payload, path, cfg, forbidden_texts=forbidden_texts)
@@ -381,6 +413,8 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
             records = await asyncio.gather(*(evaluate_generated(item) for item in generated))
             scored = [record for record in records if record["status"] == "scored"]
             if not scored:
+                state["last_failure"] = {"round": round_index, "candidates": records}
+                state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
                 raise RuntimeError(f"round {round_index}: every candidate failed generation or evaluation")
             challenger = max(scored, key=lambda record: (record["tune_score"], -record["index"]))
             challenger_path = Path(challenger["path"])
@@ -410,14 +444,15 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
                 "incumbent_score": incumbent_score, "promoted": promoted,
             }
             state["rounds"].append(round_record)
+            state.pop("last_failure", None)
             state["final_score"] = incumbent_score
-            (output / "optimization.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+            state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
             if not keep_candidates:
                 shutil.rmtree(candidates_dir)
 
     state["final_score"] = incumbent_score
     state["improvement"] = incumbent_score - state["initial_score"]
-    (output / "optimization.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+    state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
     return state
 
 

@@ -50,6 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     op.add_argument("--candidate-parallelism", type=int, default=None,
                     help="candidate evaluations run at once (default: auto within container concurrency)")
     op.add_argument("--keep-candidates", action="store_true", help="retain losing skill folders for debugging")
+    op.add_argument("--resume", action="store_true", help="resume a compatible interrupted optimization directory")
     op.add_argument("--config", default=None)
     ck = sub.add_parser("check-skill", help="static submission checks for a skill folder")
     ck.add_argument("skill")
@@ -149,7 +150,7 @@ def _run(args) -> int:
                 optimizer_model=args.optimizer_model, upstream_base_url=base, upstream_key=key,
                 optimizer_base_url=args.optimizer_base_url, optimizer_key=optimizer_key,
                 concurrency=args.concurrency, candidate_parallelism=args.candidate_parallelism,
-                keep_candidates=args.keep_candidates,
+                keep_candidates=args.keep_candidates, resume=args.resume,
             ))
         except (OSError, ValueError, RuntimeError) as e:
             print(e)

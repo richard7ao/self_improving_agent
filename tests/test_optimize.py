@@ -102,7 +102,7 @@ class OptimizeTests(unittest.IsolatedAsyncioTestCase):
                 "---\nname: incumbent\ndescription: Initial.\n---\nincumbent\n", encoding="utf-8"
             )
 
-            async def fake_chat(_client, _model, system, user, *, seed):
+            async def fake_chat(_client, _model, system, user, *, seed, json_mode=False):
                 if "Return plain text" in system:
                     return "Try clearer prioritization."
                 variant = __import__("json").loads(user)["variant"]
