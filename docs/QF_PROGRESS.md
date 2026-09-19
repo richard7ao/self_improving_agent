@@ -2,30 +2,31 @@
 
 ## Current conclusion
 
-No measured score improvement has been established. The strongest completed
-challenger finished normally but failed alpha strategy. Under the user's explicit
-five-minute request to improve while preserving the original base, the live skill
-now adds only three backtest accounting checks: daily return coverage, subtraction
-of nonnegative fees, and type-aligned calendar checks. All original references,
-scripts, routing, and other guidance remain intact. This narrow correctness edit
-is **not a benchmark-validated promotion** of the unsuccessful rewritten candidates.
+The timing-only candidate passed **alpha-hedge-strategy: 1/1**, compared with
+**0/1** for both the original skill and the accounting-only edit on the same public
+training task. This is the first measured tuning improvement, not a held-out result.
+The run completed normally, with 152,676 tokens and **$0.01008204** recorded cost
+(complete). Evidence: `runs/qf-original-timing-20260919T170311Z/eval-alpha`.
+
+The candidate retains the original references and scripts and adds one instruction
+to trace information availability before crediting returns. Its digest is
+`9e4d063aa0ee93c80002f3f8df149a1d6fb43b6add61d5e33bcac426f1f34977`.
+The reproducible patch is preserved under `docs/qf-candidates/`; reserved validation
+and the corporate-action regression check remain outstanding, so it is not yet
+promoted as a validated submission. The live skill retains the earlier three
+accounting checks. No unsuccessful rewritten candidate has replaced the base.
 
 The original incumbent remains frozen at digest
 `6eee54bacc74a13a422a4578aa2b43ef60545151c972763815922c346b63f92a`.
-The updated live skill digest is
-`780b8dee56d093dce29f210f32c77e07e4c3e25532d2c07f38ac2fd3d09ba635`.
-All 43 repository tests and 14 live-toolkit tests pass; static validation and the
-54-instruction overlap check are clean. Its sequential alpha evaluation at
-`runs/qf-astra-daily-accrual-20260919T164105Z/eval-alpha` completed normally with
-score **0/1**, no provider errors, and recorded cost **$0.01542876**. The unused
-concise candidate is preserved as `skill-concise-unrun` alongside the base snapshot.
-The next isolated candidate adds only an explicit information-timing rule and is
-being evaluated at `runs/qf-original-timing-20260919T170311Z/eval-alpha`.
+The accounting-only evaluation at
+`runs/qf-astra-daily-accrual-20260919T164105Z/eval-alpha` scored **0/1**, with no
+provider errors and **$0.01542876** cost. Original Brinson attribution and
+corporate-action checks both passed, tying their placebo controls.
 
-The user authorized pulling, consolidating, pushing, and continued work. Pulling
-`origin/main` into `codex/qf-evaluation-and-tools` found no newer upstream changes.
-Only source, submission tooling fixes, tests, and this report are tracked;
-credentials, datasets, candidates, and detailed run evidence remain local/ignored.
+The user authorized direct pushes to main. Upstream changes through `450e3d3`
+are consolidated. Credentials, datasets, and detailed run artifacts remain ignored.
+Doctor confirms Docker, API authentication, and all 54 QF tasks; the full-dataset
+check fails because other domains have not been downloaded.
 
 ## Tested engineering changes
 
@@ -91,7 +92,7 @@ charges. Separate doctor probes are not included.
 | `qf-asian-placebo-retry-20260919T160833Z/evaluation` | interrupted to prioritize the candidate after further transport failures; unscored | partial ledger retained |
 | `qf-astra-daily-accrual-20260919T164105Z/eval-alpha` | original base plus accounting checks, normal completion 0/1; no gain | 0.01542876 |
 | `qf-brinson-incumbent-20260919T170151Z/evaluation` | original skill 1/1, placebo 1/1; includes an unscored verifier-download failure before retry | 0.02689535 |
-| `qf-original-timing-20260919T170311Z/eval-alpha` | original base plus accounting and one timing rule; running | pending |
+| `qf-original-timing-20260919T170311Z/eval-alpha` | normal completion 1/1; first tuning gain, validation pending | 0.01008204 |
 
 Older raw reports incorrectly mark some transport-failure costs complete; the
 new cost-reporting fix corrects future runs without overwriting old evidence.
@@ -124,8 +125,8 @@ on attribution because the original already passes that task.
 
 ## Next work
 
-Test the minimal original-base timing edit on alpha under the unchanged
-learner. Because provider read timeouts and HTTP 429 responses contaminated
+Confirm the successful timing edit on the corporate-action regression task and
+reserved validation tasks under the unchanged learner. Because provider read timeouts and HTTP 429 responses contaminated
 parallel runs, let existing work finish and run subsequent evaluations one at a
 time. Do not change pinned inference settings or extend task limits.
 
