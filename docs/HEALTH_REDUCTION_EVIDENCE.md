@@ -41,6 +41,18 @@ These are descriptive associations, not causal estimates. The task set is fixed 
 candidate changes are confounded; answer length may proxy rubric coverage; and calls may
 proxy successful task completion. They do not justify rewarding verbosity or extra calls.
 
+An independent trajectory audit found five empty deliveries among the 42 tune attempts.
+Their mean raw score was `-0.0867`, versus `0.2205` for the 37 non-empty attempts. In
+several failures the learner generated useful prose inside chat or planning but never wrote
+it to `response.txt`; four of five first spent a turn creating directories. A status-only
+check is insufficient because completed empty answers were recorded with a successful task
+status and then graded normally.
+
+The apparent length relationship is also task-dependent. After excluding empty outputs,
+the three within-task score-versus-answer-word correlations were approximately `-0.241`,
+`-0.039`, and `+0.572`. Completeness plausibly helped the sparse-fragment task, while the
+other two provide no evidence that verbosity itself improves quality.
+
 ## Current survivor versus the strongest unvalidated challenger
 
 R5 B changed the live response method by adding a more explicit symptom action ladder. Its
@@ -70,6 +82,14 @@ hit the iteration limit before drafting and delivery. The placebo produced non-e
 answers in all four cases. Therefore this result identifies a delivery/runtime failure; it
 does not measure the medical quality of answers the maximal package might have produced.
 
+Tool-use evidence from the tune rounds is weak. Only three successful constraint-checker
+invocations were recoverable, on attempts scoring `0.4086`, `0.2877`, and `0.0411`; their
+mean was `0.2458`, versus `0.2205` for all non-empty tune attempts. This comparison is
+heavily selected and confounded. One candidate first made three wrong-path calls, and its
+eventual checker invocation reported a failed constraint. The justified conclusion is only
+that exact mounted paths and narrow triggers matter; there is no demonstrated general score
+gain from adding more tools.
+
 ## Implications for final reduction
 
 Keep the maximal Health package as a source library, but compile a separate runtime
@@ -80,7 +100,8 @@ The first reduction candidate should:
 1. Keep the always-visible decision protocol near the empirically successful 430–500-word
    range. This is a starting band, not a proven optimum.
 2. Require zero preliminary tool calls for ordinary clinical answers. The learner should
-   draft and deliver first; optional checking must fit after a usable answer exists.
+   draft and deliver first; optional checking must fit after a usable answer exists. Do not
+   spend an initial turn creating a workspace or searching for a script.
 3. Route at most one conditional reference for a genuinely specialized case. Avoid chains
    of indexes, planners, workspaces, and finalizers within a four-iteration harness.
 4. Preserve direct answering, conversation continuity, bounded-artifact discipline,
