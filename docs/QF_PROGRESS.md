@@ -15,9 +15,12 @@ The original incumbent remains frozen at digest
 The updated live skill digest is
 `780b8dee56d093dce29f210f32c77e07e4c3e25532d2c07f38ac2fd3d09ba635`.
 All 43 repository tests and 14 live-toolkit tests pass; static validation and the
-54-instruction overlap check are clean. Evaluation is queued sequentially at
-`runs/qf-astra-daily-accrual-20260919T164105Z/eval-alpha`; its unused concise
-candidate is preserved as `skill-concise-unrun` alongside the new base snapshot.
+54-instruction overlap check are clean. Its sequential alpha evaluation at
+`runs/qf-astra-daily-accrual-20260919T164105Z/eval-alpha` completed normally with
+score **0/1**, no provider errors, and recorded cost **$0.01542876**. The unused
+concise candidate is preserved as `skill-concise-unrun` alongside the base snapshot.
+The next isolated candidate adds only an explicit information-timing rule and is
+being evaluated at `runs/qf-original-timing-20260919T170311Z/eval-alpha`.
 
 The user authorized pulling, consolidating, pushing, and continued work. Pulling
 `origin/main` into `codex/qf-evaluation-and-tools` found no newer upstream changes.
@@ -65,6 +68,7 @@ validation scores, never a tie.
 | `alpha-hedge-strategy` | fail | fail | tie |
 | `asian-option-levy-curran` | API crash; replacement running | timeout with transport failures | inconclusive |
 | `13f-amendment-aware-crowding` | replacement failed normally | timeout with transport failures | inconclusive |
+| `brinson-sector-attribution` | pass | pass | tie; original base preserved |
 
 The original options and filing raw zero/zero reports must not be quoted as clean
 paired comparisons. Their invalidations are recorded alongside the run evidence.
@@ -84,7 +88,10 @@ charges. Separate doctor probes are not included.
 | `qf-temporal-cost-candidate-20260919T1530/eval-alpha` | inconclusive: two 600-second read failures consumed most of the agent limit | 0.01514160, incomplete |
 | `qf-astra-concise-20260919T155138Z/eval-alpha` | inconclusive: read timeout and repeated HTTP 429 responses before agent timeout | 0.01494540, incomplete |
 | `qf-astra-period-boundary-20260919T161307Z/eval-alpha` | normal completion, score 0/1; 336,556 tokens; rejected for no gain | 0.02028193 |
-| `qf-asian-placebo-retry-20260919T160833Z/evaluation` | replacement still running | pending |
+| `qf-asian-placebo-retry-20260919T160833Z/evaluation` | interrupted to prioritize the candidate after further transport failures; unscored | partial ledger retained |
+| `qf-astra-daily-accrual-20260919T164105Z/eval-alpha` | original base plus accounting checks, normal completion 0/1; no gain | 0.01542876 |
+| `qf-brinson-incumbent-20260919T170151Z/evaluation` | original skill 1/1, placebo 1/1; includes an unscored verifier-download failure before retry | 0.02689535 |
+| `qf-original-timing-20260919T170311Z/eval-alpha` | original base plus accounting and one timing rule; running | pending |
 
 Older raw reports incorrectly mark some transport-failure costs complete; the
 new cost-reporting fix corrects future runs without overwriting old evidence.
@@ -99,7 +106,11 @@ new cost-reporting fix corrects future runs without overwriting old evidence.
 3. The latest challenger constructed its calendar correctly but calculated P&L only
    on rebalance dates, dropping intervening daily returns from regression and
    performance statistics. Holdings update frequency and return accrual frequency
-   must be kept separate. This is the next focused change.
+   must be kept separate.
+4. The original-base accounting edit fixed daily accrual, cost signs, and schedule
+   construction, but still selected positions using the same return later credited
+   to those positions. The timing-only candidate addresses this look-ahead without
+   imposing a universal lag or changing the original references and scripts.
 
 Some signal and sizing conventions in the public alpha task are underspecified.
 These ambiguities do not explain the concrete return-sampling bug. Candidates
@@ -107,11 +118,13 @@ must teach general methods, not memorize task constants or expected outputs.
 
 The standalone synthetic-timing candidate at
 `qf-astra-tune-20260919T155123Z/skill` passed offline checks but was not evaluated.
-The concise and period-boundary candidates remain isolated and unpromoted.
+The concise and period-boundary candidates remain isolated and unpromoted. A small
+drift-helper candidate also passed 18 offline tests, but it will not be evaluated
+on attribution because the original already passes that task.
 
 ## Next work
 
-Test the minimal original-base accounting edit on alpha under the unchanged
+Test the minimal original-base timing edit on alpha under the unchanged
 learner. Because provider read timeouts and HTTP 429 responses contaminated
 parallel runs, let existing work finish and run subsequent evaluations one at a
 time. Do not change pinned inference settings or extend task limits.
