@@ -95,6 +95,18 @@ findings never erase a delivered answer. Revise once only when the report identi
 issue, then call the same finalizer again. This is the normal four-iteration budget: draft and save,
 finalize, revise if necessary, verify and finish.
 
+When two or more explicit calculations or data transforms are genuinely needed before drafting,
+put them in one `operations` array and run one dispatcher call:
+
+`python /harbor/skills/stbench-skill/scripts/health_tool.py analyze --input /tmp/health-operations.json`
+
+Each operation has exactly `id`, `tool`, and `input`; supported tool names are `timeline`,
+`lab_trend`, `medication_reconcile`, `unit_math`, `dose_math`, and `record_summary`. The dispatcher
+runs them in order and returns all labeled results in one compact JSON object. Do not use this mode
+for a single simple operation or as a substitute for clinical reasoning. `finalize` also accepts the
+same optional operations array, but because it delivers first, those results should validate rather
+than originate claims in the already-written draft.
+
 - Evidence-state conflicts: `scripts/quality/evidence_ledger.py`
 - Unsupported certainty warning: `scripts/quality/claim_audit.py`
 - Requested concepts or clauses: `scripts/quality/coverage_check.py`

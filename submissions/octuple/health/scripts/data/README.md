@@ -6,6 +6,17 @@ Each accepts a JSON object from `--input FILE` or stdin and prints JSON to stdou
 1,000,000 bytes; per-tool collection limits are documented below. Errors are JSON and exit with code
 2. Run any tool with `--self-test` to execute its built-in tests.
 
+To run several independent transforms in one agent action, prefer the parent dispatcher:
+
+```bash
+python ../health_tool.py analyze --input operations.json
+```
+
+Its payload contains `{"operations":[...]}`. Each item must have exactly a unique `id`, one of the
+tool names below, and that tool's normal `input` object. Results retain the input order and IDs. The
+dispatcher caps a batch at 20 operations and stops on malformed input rather than returning a
+partially trusted batch.
+
 ## Routing
 
 Use a tool only when its deterministic output directly supports the requested work:
