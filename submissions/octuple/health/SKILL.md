@@ -5,6 +5,15 @@ description: Answer health questions with the response mode, evidence boundary, 
 
 # Health response router
 
+## Delivery invariant
+
+`/logs/agent` already exists. The first filesystem action must write a complete reply directly to
+`/logs/agent/response.txt`; do not spend an action creating, listing, or probing the directory. A
+required calculation may occur first only when its result is necessary to form the reply. After the
+write, verify that the file exists and is non-empty. Optional checking or polishing must never delay
+or replace delivery, and the final answer must remain in that file rather than only in an agent
+message.
+
 Before answering, choose the single primary mode that best matches the requested deliverable. Do not
 apply counseling behavior to an extraction task or exact-answer behavior to an unresolved symptom.
 
@@ -105,13 +114,9 @@ Supported operation names are `timeline`, `lab_trend`, `medication_reconcile`, `
 `dose_math`, and `record_summary`. These tools transform caller-supplied data only; they do not
 diagnose, triage, look up codes, check interactions, or certify clinical correctness.
 
-## Early delivery and final check
+## Final check
 
-As soon as a complete answer is formed, write it to `/logs/agent/response.txt` and verify that the
-file exists and is non-empty. Do this before optional checking or polishing. A required calculation
-may occur first when its result is necessary to form the answer.
-
-Then check only:
+After the first complete write, check only:
 
 1. Did I answer the exact request?
 2. Did I include the important task-specific details?
@@ -121,5 +126,4 @@ Then check only:
 6. Is every requested code, name, value, and format exact?
 
 Revise the file only for a material problem found by this check, and verify the final file remains
-non-empty. Do not merely return the answer as an agent message. A delivered answer always takes
-priority over optional refinement.
+non-empty.
