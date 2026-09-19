@@ -99,13 +99,16 @@ async def run_eval(cfg: HackathonCfg, domain_name: str, *, skill_dir: str | Path
     headers = {"authorization": f"Bearer {upstream_key}"} if upstream_key else {}
     upstream = httpx.AsyncClient(base_url=upstream_base_url, headers=headers, timeout=600.0)
     prices = await fetch_prices(upstream)
-    learner_meter, learner_ledger = BudgetMeter(domain.eval_budget_tokens), Ledger()
+    learner_meter = BudgetMeter(domain.eval_budget_tokens)
+    learner_ledger = Ledger(sink_path=out / "learner_ledger.jsonl")
     learner_gw = await LocalGatewayServer(build_app(learner_meter, client=upstream, ledger=learner_ledger,
                                                     prices=prices)).start()
     needs_aux = domain.benchmark != "qfbench"
     aux_meter = aux_ledger = aux_registry = aux_key = aux_gw = aux_exhausted = None
     if needs_aux:
-        aux_meter, aux_ledger, aux_registry = BudgetMeter(domain.judge_budget_tokens), Ledger(), AttemptTagRegistry()
+        aux_meter = BudgetMeter(domain.judge_budget_tokens)
+        aux_ledger = Ledger(sink_path=out / "grader_ledger.jsonl")
+        aux_registry = AttemptTagRegistry()
         aux_key = secrets.token_urlsafe(32)
         aux_app = build_app(aux_meter, client=upstream, ledger=aux_ledger, virtual_key=aux_key,
                             attempt_registry=aux_registry, prices=prices)

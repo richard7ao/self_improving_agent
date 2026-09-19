@@ -14,6 +14,7 @@ import asyncio
 import contextvars
 import hmac
 import json
+import logging
 import math
 import os
 import re
@@ -24,6 +25,7 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import httpx
 import uvicorn
@@ -164,16 +166,30 @@ def _percentile(values: list[float], q: float) -> float | None:
 
 
 class Ledger:
-    """One row per gateway call: the budget decision and timing, never content."""
+    """Call metadata only; optionally append each row to a durable JSONL sink."""
 
-    def __init__(self) -> None:
+    def __init__(self, sink_path: str | Path | None = None) -> None:
         self._entries: list[dict] = []
         self._lock = threading.Lock()
+        self._sink_path = Path(sink_path) if sink_path is not None else None
+        if self._sink_path is not None:
+            self._sink_path.parent.mkdir(parents=True, exist_ok=True)
 
     def record(self, entry: dict, *, tags: dict | None = None) -> None:
         tag = _current_tag.get()
         with self._lock:
-            self._entries.append({"seq": len(self._entries), **entry, **(tag or {}), **(tags or {})})
+            row = {"seq": len(self._entries), **entry, **(tag or {}), **(tags or {})}
+            self._entries.append(row)
+            if self._sink_path is not None:
+                try:
+                    with self._sink_path.open("a", encoding="utf-8") as sink:
+                        sink.write(json.dumps(row, separators=(",", ":")) + "\n")
+                        sink.flush()
+                        os.fsync(sink.fileno())
+                except OSError as error:
+                    # Reporting failures must not change a completed model call.
+                    logging.getLogger(__name__).error(
+                        "Ledger sink write failed (%s); row retained in memory", type(error).__name__)
 
     @property
     def entries(self) -> list[dict]:
@@ -206,7 +222,10 @@ class Ledger:
                 "estimated_usd": round(sum(float(e["cost_usd"]) for e in priced), 8) if priced else None,
                 "by_model": by_model,
                 "n_priced": len(priced),
-                "incomplete": any(e.get("status") in ("ok", "fail_closed") and e.get("cost_usd") is None
+                "incomplete": any(e.get("cost_usd") is None and (
+                                      e.get("status") in ("ok", "fail_closed")
+                                      or e.get("fail_closed")
+                                      or int(e.get("charged_tokens", 0) or 0) > 0)
                                   for e in es),
             },
             **({"by_arm": by_arm} if by_arm else {}),

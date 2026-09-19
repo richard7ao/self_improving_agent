@@ -1,16 +1,71 @@
 import unittest
 import asyncio
 import tempfile
+import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from skilltrainbench.evaluate import delivery_summary, _attempt_with_retries
+from skilltrainbench.evaluate import delivery_summary, _attempt_with_retries, run_eval
+from skilltrainbench.config import load_config
 from skilltrainbench.tasks import Task, attempt_from_trial, score
 from skilltrainbench.optimize import _delivery_failures
 from skilltrainbench.optimizer_tools import classify_attempts
 
 
 class EvaluateTests(unittest.TestCase):
+    def test_gateway_ledgers_are_readable_before_attempt_finishes(self):
+        cfg = load_config()
+        for domain_name in ("qf", "health"):
+            with self.subTest(domain=domain_name), tempfile.TemporaryDirectory() as tmp:
+                out = Path(tmp)
+                domain = cfg.domain(domain_name)
+                task = Task(f"{domain.benchmark}-train-synthetic", "synthetic",
+                            domain.benchmark, out, 60)
+                ledgers = []
+                snapshots = {}
+
+                def fake_app(meter, *, ledger, **kwargs):
+                    ledgers.append(ledger)
+                    return SimpleNamespace(state=SimpleNamespace(budget_rejected=False))
+
+                class FakeServer:
+                    container_url = "http://unused.invalid"
+
+                    def __init__(self, app):
+                        pass
+
+                    async def start(self):
+                        return self
+
+                    async def stop(self):
+                        pass
+
+                async def fake_attempt(*args, **kwargs):
+                    for label, ledger in zip(("learner", "grader"), ledgers):
+                        ledger.record({"status": "ok", "charged_tokens": 12})
+                        path = out / f"{label}_ledger.jsonl"
+                        # This assertion runs while evaluation is still in progress,
+                        # before its final artifact writes can hide missing wiring.
+                        snapshots[label] = path.read_text()
+                        self.assertEqual(json.loads(snapshots[label])["charged_tokens"], 12)
+                    return {"task_id": task.id, "status": "ok", "blocked": False,
+                            "error": None, "verifier_status": "ok",
+                            "artifacts": {"verifier": {"success": True, "reward": 1.0}}}
+
+                with patch("skilltrainbench.evaluate.task_names", return_value=[task.name]), \
+                     patch("skilltrainbench.evaluate.load_task", return_value=task), \
+                     patch("skilltrainbench.evaluate.fetch_prices", AsyncMock(return_value={})), \
+                     patch("skilltrainbench.evaluate.build_app", side_effect=fake_app), \
+                     patch("skilltrainbench.evaluate.LocalGatewayServer", FakeServer), \
+                     patch("skilltrainbench.evaluate._attempt_with_retries", side_effect=fake_attempt):
+                    asyncio.run(run_eval(cfg, domain_name, skill_dir=None, out=out,
+                                         arms=["baseline"], upstream_base_url="http://unused.invalid",
+                                         upstream_key=None))
+                self.assertEqual(len(ledgers), 1 if domain_name == "qf" else 2)
+                for label, snapshot in snapshots.items():
+                    self.assertEqual((out / f"{label}_ledger.jsonl").read_text(), snapshot)
+
     def test_upstream_crash_is_not_a_scored_zero(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
