@@ -24,20 +24,31 @@ from .config import HackathonCfg, check_skill, task_names
 
 _REVIEW_SYSTEM = """You review a skill used by a frozen agent on public training tasks.
 Find general, reusable causes of low scores across tasks. Do not reproduce task text,
-rubrics, reference answers, patient details, or task-specific facts. Recommend a small
-number of competing improvement strategies. A good skill changes agent decisions and
-uses concise progressive disclosure; deterministic offline scripts are appropriate only
-when they add real reliability. Return plain text, not a replacement skill."""
+rubrics, reference answers, patient details, or task-specific facts. Do not provide private
+chain-of-thought. For each finding, report: observed evidence, a concise decision rationale,
+calculations or assumptions involved, confidence (high/medium/low) with the reason for that
+rating, and a competing improvement hypothesis. Explicitly flag low-confidence calculations
+or repeatable deterministic transformations that an offline tool could verify. Distinguish
+those from clinical judgment, ambiguity, or missing evidence that a script cannot resolve.
+A good skill changes agent decisions and uses concise progressive disclosure. Recommend a
+small number of materially different strategies. Return plain text, not a replacement skill."""
 
 _CHANGE_SYSTEM = """You improve a self-contained agent skill folder from an evaluation review.
-Return ONLY one JSON object with keys `rationale` (string) and `files` (array). Each file
-has `path` and `content`. Include a complete SKILL.md with YAML frontmatter containing
-name and description. You may add focused files below references/ or scripts/. Scripts
-must work offline, use no credentials or external services, and should use the Python
-standard library where possible. SKILL.md must tell the agent when and how to use each
-supporting file. Generalize from failures: never copy or encode task text, rubrics,
-reference answers, patient details, or dataset-specific answer mappings. Do not include
-URLs. Keep the entire folder compact."""
+Return ONLY one JSON object with keys `rationale` (string), `confidence` (high, medium, or
+low), `calculations` (array), and `files` (array). The rationale must be a concise design
+justification, not private chain-of-thought. Each calculation item must describe the
+calculation or deterministic check, its inputs/assumptions, confidence, and either the
+offline tool path that verifies it or why a tool would not help. Each file has `path` and
+`content`. Include a complete SKILL.md with YAML frontmatter containing name and description.
+You may add focused files below references/ or scripts/. When a low-confidence calculation
+or repeatable deterministic transformation can be made reliable with a tool, create a small
+offline script and make SKILL.md say exactly when and how to call it. Do not create tools for
+clinical judgment, missing facts, subjective tradeoffs, or facts requiring current external
+knowledge. Scripts must work offline, use no credentials or external services, and should use
+the Python standard library where possible. Every supporting file must be named in SKILL.md
+with its trigger and use. Generalize from failures: never copy or encode task text, rubrics,
+reference answers, patient details, or dataset-specific answer mappings. Do not include URLs.
+Keep the entire folder compact."""
 
 
 @dataclass(frozen=True)
@@ -139,6 +150,16 @@ def materialize_candidate(payload: dict, destination: Path, cfg: HackathonCfg,
     check = check_skill(destination, cfg)
     if not check["ok"] or check["warnings"]:
         raise ValueError(f"generated skill failed static checks: {json.dumps(check, ensure_ascii=False)}")
+    skill_text = (destination / "SKILL.md").read_text(encoding="utf-8")
+    unreferenced = [
+        path.as_posix()
+        for path in seen
+        if path.as_posix() != "SKILL.md" and path.as_posix() not in skill_text
+    ]
+    if unreferenced:
+        raise ValueError(
+            "generated supporting files are not routed from SKILL.md: " + ", ".join(sorted(unreferenced))
+        )
     _reject_task_copy(_skill_files(destination), forbidden_texts or [])
     rationale = payload.get("rationale", "")
     return rationale if isinstance(rationale, str) else ""
@@ -366,7 +387,7 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
                                  seed=seed + round_index * 1000)
             (round_dir / "review.txt").write_text(review, encoding="utf-8")
 
-            async def generate(index: int) -> tuple[int, Path, str]:
+            async def generate(index: int) -> tuple[int, Path, str, str, list]:
                 prompt = json.dumps({
                     "variant": index,
                     "diversity_instruction": (
@@ -382,7 +403,13 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
                 payload = _parse_object(raw)
                 path = candidates_dir / f"candidate-{index:02d}"
                 rationale = materialize_candidate(payload, path, cfg, forbidden_texts=forbidden_texts)
-                return index, path, rationale
+                confidence = payload.get("confidence", "unspecified")
+                if confidence not in {"high", "medium", "low"}:
+                    confidence = "unspecified"
+                calculations = payload.get("calculations", [])
+                if not isinstance(calculations, list):
+                    calculations = []
+                return index, path, rationale, confidence, calculations
 
             generated = await asyncio.gather(*(generate(i) for i in range(1, candidates + 1)),
                                              return_exceptions=True)
@@ -396,7 +423,7 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
             async def evaluate_generated(item) -> dict:
                 if isinstance(item, Exception):
                     return {"status": "generation_failed", "error": str(item)}
-                index, path, rationale = item
+                index, path, rationale, confidence, calculations = item
                 async with eval_sem:
                     print(f"round {round_index}: evaluating candidate {index}/{candidates} on tune tasks")
                     try:
@@ -406,9 +433,11 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
                         )
                     except (OSError, ValueError, RuntimeError, httpx.HTTPError) as error:
                         return {"status": "evaluation_failed", "index": index, "path": str(path),
-                                "rationale": rationale, "error": str(error)}
+                                "rationale": rationale, "confidence": confidence,
+                                "calculations": calculations, "error": str(error)}
                 return {"status": "scored", "index": index, "path": str(path),
-                        "rationale": rationale, "tune_score": _rate(result), "result": result}
+                        "rationale": rationale, "confidence": confidence,
+                        "calculations": calculations, "tune_score": _rate(result), "result": result}
 
             records = await asyncio.gather(*(evaluate_generated(item) for item in generated))
             scored = [record for record in records if record["status"] == "scored"]

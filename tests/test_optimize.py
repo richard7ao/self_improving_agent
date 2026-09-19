@@ -55,7 +55,6 @@ class OptimizeTests(unittest.IsolatedAsyncioTestCase):
             "rationale": "focused checklist",
             "files": [
                 {"path": "SKILL.md", "content": "---\nname: test-health\ndescription: Test health skill.\n---\n\n# Method\nBe useful.\n"},
-                {"path": "scripts/check.py", "content": "print('ok')\n"},
             ],
         }
         with tempfile.TemporaryDirectory() as raw:
@@ -63,6 +62,18 @@ class OptimizeTests(unittest.IsolatedAsyncioTestCase):
             rationale = materialize_candidate(payload, destination, cfg)
             self.assertEqual(rationale, "focused checklist")
             self.assertTrue((destination / "SKILL.md").is_file())
+
+    def test_materialize_requires_skill_to_route_supporting_files(self):
+        cfg = load_config()
+        payload = {
+            "files": [
+                {"path": "SKILL.md", "content": "---\nname: test\ndescription: Test.\n---\nUse the method.\n"},
+                {"path": "scripts/check.py", "content": "print('ok')\n"},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as raw:
+            with self.assertRaisesRegex(ValueError, "not routed from SKILL.md"):
+                materialize_candidate(payload, Path(raw) / "candidate", cfg)
 
     def test_materialize_rejects_external_endpoint_warning(self):
         cfg = load_config()
@@ -109,6 +120,12 @@ class OptimizeTests(unittest.IsolatedAsyncioTestCase):
                 score = 60 if variant == 1 else 80
                 return __import__("json").dumps({
                     "rationale": f"variant {variant}",
+                    "confidence": "high" if variant == 2 else "medium",
+                    "calculations": [{
+                        "check": "weighted candidate score",
+                        "confidence": "high",
+                        "tool": None,
+                    }],
                     "files": [{
                         "path": "SKILL.md",
                         "content": (
@@ -138,6 +155,12 @@ class OptimizeTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(result["final_score"], 0.8)
             self.assertTrue(result["rounds"][0]["promoted"])
+            winner = next(
+                candidate for candidate in result["rounds"][0]["candidates"]
+                if candidate.get("index") == 2
+            )
+            self.assertEqual(winner["confidence"], "high")
+            self.assertEqual(winner["calculations"][0]["check"], "weighted candidate score")
             self.assertIn("candidate-score-80", (live / "SKILL.md").read_text(encoding="utf-8"))
             self.assertFalse((root / "run" / "round-01" / "candidates").exists())
 
