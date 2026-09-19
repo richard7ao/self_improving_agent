@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from dataclasses import replace
@@ -15,6 +16,9 @@ from skilltrainbench.optimize import (
     _reject_task_copy,
     _safe_relative,
     _without_grading_material,
+    _observations,
+    _should_promote,
+    _trajectory_evidence,
     make_split,
     materialize_candidate,
     run_optimization,
@@ -22,6 +26,61 @@ from skilltrainbench.optimize import (
 
 
 class OptimizeTests(unittest.IsolatedAsyncioTestCase):
+    def test_tune_gain_cannot_hide_validation_regression_or_tie(self):
+        result = lambda value: {"summary": {"skill_rate": value}}
+        split = Split(tune=["a", "b"], validation=["c"])
+        for validation in (0.0, 0.5):
+            self.assertFalse(_should_promote(result(0), result(0.5), result(1),
+                                            result(validation), split, 0))
+        self.assertTrue(_should_promote(result(0), result(0.5), result(1), result(1), split, 0))
+
+    def test_review_uses_only_tune_learner_trajectory(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            agent = root / "trial" / "agent"
+            agent.mkdir(parents=True)
+            (agent / "trajectory.json").write_text(json.dumps({"steps": [
+                {"source": "system", "message": "secret-system"},
+                {"source": "agent", "message": "calculation finished",
+                 "reasoning_content": "secret-reasoning", "tool_calls": [],
+                 "observation": {"results": [{"content": "sum=1"}]}}
+            ]}))
+            (root / "attempts.jsonl").write_text("\n".join(json.dumps(row) for row in [
+                {"task_name": "tune", "trial_dir": str(agent.parent), "answer": ""},
+                {"task_name": "validation", "answer": "secret-validation"}]))
+            evidence = _observations(root, {}, {"tune": {}})
+            self.assertIn("calculation finished", evidence)
+            self.assertIn("sum=1", evidence)
+            self.assertNotIn("secret-", evidence)
+
+    def test_trajectory_cannot_escape_evaluation_directory(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            outside = root / "outside" / "agent"
+            outside.mkdir(parents=True)
+            (outside / "trajectory.json").write_text('{"steps": []}')
+            evaluation = root / "evaluation"
+            evaluation.mkdir()
+            (evaluation / "linked-trial").symlink_to(outside.parent)
+            self.assertEqual(_trajectory_evidence(evaluation, str(outside.parent))["status"],
+                             "outside_evaluation")
+            self.assertEqual(_trajectory_evidence(evaluation, str(evaluation / "linked-trial"))["status"],
+                             "outside_evaluation")
+
+    def test_trajectory_retains_latest_steps_with_bounded_size(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            agent = root / "trial" / "agent"
+            agent.mkdir(parents=True)
+            (agent / "trajectory.json").write_text(json.dumps({"steps": [
+                {"source": "agent", "step_id": index, "message": "x" * 5000}
+                for index in range(100)
+            ]}))
+            evidence = _trajectory_evidence(root, str(agent.parent))
+            self.assertEqual(evidence["steps"][-1]["step_id"], 99)
+            self.assertLess(len(json.dumps(evidence)), 19000)
+
+
     def test_split_is_deterministic_disjoint_and_complete(self):
         names = [f"task-{index}" for index in range(10)]
         first = make_split(names, 0.2, 42)
