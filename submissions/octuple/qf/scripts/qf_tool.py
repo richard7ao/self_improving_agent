@@ -321,7 +321,7 @@ def directory_fingerprint(path: str | Path) -> dict[str, str]:
 
 
 def _is_missing(text: str) -> bool:
-    return text.strip().lower() in {"", "na", "nan", "null", "none"}
+    return text.strip().lower() in {"", "na", "null", "none"}
 
 
 def _csv_summary(path: Path) -> dict[str, Any]:

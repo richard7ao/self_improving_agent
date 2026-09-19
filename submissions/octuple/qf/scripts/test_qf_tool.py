@@ -74,6 +74,14 @@ class QFToolTests(unittest.TestCase):
             self.assertTrue(q.validate_outputs(root, ["result.json", "table.csv"])["ok"])
             self.assertEqual(q.directory_fingerprint(root), q.directory_fingerprint(root))
 
+    def test_csv_nonfinite_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "bad.csv").write_text("value\nNaN\n")
+            result = q.validate_outputs(root, ["bad.csv"])
+            self.assertFalse(result["ok"])
+            self.assertIn("non-finite", result["errors"][0])
+
     def test_router_minimal_and_warns(self):
         result = q.route(["hmm"], ["annualization"], ["results.json"])
         self.assertIn("transition_diagnostics", result["helpers"])
