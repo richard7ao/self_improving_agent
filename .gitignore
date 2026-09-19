@@ -1,5 +1,16 @@
-.DS_Store
-.env
-.venv/
 __pycache__/
-*.py[cod]
+*.pyc
+.venv/
+.DS_Store
+
+# Credentials
+.env
+.env.*
+!.env_example
+.litellm_config*.yaml
+
+# Run outputs and downloaded data
+runs/
+dataset/
+*.tar.zst
+build/
