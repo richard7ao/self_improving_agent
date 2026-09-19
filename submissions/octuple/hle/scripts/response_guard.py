@@ -14,6 +14,20 @@ from pathlib import Path
 
 FIELDS = ("Explanation", "Answer", "Confidence")
 CONFIDENCE = re.compile(r"^(?:100|[1-9]?\d)%$")
+UNFINISHED = (
+    re.compile(r"\b(?:todo|tbd|fixme)\b", re.IGNORECASE),
+    re.compile(r"\bneed(?:s|ed)?\s+(?:to\s+)?(?:check|verify|finish|complete)\b", re.IGNORECASE),
+    re.compile(r"<\s*(?:answer|explanation|reasoning|confidence|placeholder)[^>]*>", re.IGNORECASE),
+    re.compile(r"\.\.\.\s*$"),
+)
+
+
+def unfinished_marker(value: str) -> str | None:
+    for pattern in UNFINISHED:
+        match = pattern.search(value)
+        if match:
+            return match.group(0)
+    return None
 
 
 def validate(text: str) -> dict[str, object]:
@@ -31,6 +45,10 @@ def validate(text: str) -> dict[str, object]:
         values[field.lower()] = value
         if not value:
             violations.append(f"{field} must not be empty")
+        elif field in {"Explanation", "Answer"}:
+            marker = unfinished_marker(value)
+            if marker:
+                violations.append(f"{field} contains unfinished marker: {marker!r}")
     if values.get("confidence") and not CONFIDENCE.fullmatch(values["confidence"]):
         violations.append("Confidence must be an integer from 0% to 100%")
     return {"pass": not violations, "violations": violations, "values": values}
@@ -69,6 +87,19 @@ class SelfTests(unittest.TestCase):
 
     def test_wrong_order(self) -> None:
         self.assertFalse(validate("Answer: B\nExplanation: x\nConfidence: 91%") ["pass"])
+
+    def test_rejects_unfinished_fallback(self) -> None:
+        result = validate("Explanation: Candidate seems likely; need check\nAnswer: C\nConfidence: 50%")
+        self.assertFalse(result["pass"])
+        self.assertIn("unfinished marker", result["violations"][0])
+
+    def test_rejects_placeholder_and_trailing_ellipsis(self) -> None:
+        self.assertFalse(validate("Explanation: <reasoning>\nAnswer: B\nConfidence: 50%") ["pass"])
+        self.assertFalse(validate("Explanation: complete later...\nAnswer: B\nConfidence: 50%") ["pass"])
+
+    def test_allows_literal_ellipsis_inside_complete_sentence(self) -> None:
+        text = render("The series uses terms 1, 2, ... and therefore diverges.", "diverges", 90)
+        self.assertTrue(validate(text.rstrip("\n"))["pass"])
 
 
 def main() -> int:
