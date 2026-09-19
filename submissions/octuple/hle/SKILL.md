@@ -6,22 +6,37 @@ description: Solve HLE questions with early delivery, evidence-type routing, opt
 # HLE: answer early, then seek evidence
 
 Read `/app/instruction.md` once. The task is not complete until
-`/logs/agent/response.txt` is nonempty. Target 6–8 high-level tool calls and permit at
-most one answer correction. Never call `think`, inspect helper source, or build a review
-artifact merely to prove that a process was followed.
+`/logs/agent/response.txt` is nonempty. Never call `think`, inspect helper source, or
+build a review artifact merely to prove that a process was followed. After saving a
+durable fallback, make another call only when its possible result could distinguish the
+leading answer from its strongest competitor. Otherwise validate and finish.
 
-## 1. Save the best current answer by action 2
+## 1. Save the earliest coherent candidate
 
 Internally identify the exact requested object, answer format, important variables,
-conditions, and strongest plausible answer. Your next action after reading the task
-must save that candidate:
+conditions, and strongest plausible answer. Before the first write, without another
+tool call:
+
+1. State a complete one-sentence conclusion.
+2. Map that conclusion to the exact answer label or value.
+3. Confirm that the explanation entails that answer, rather than a different option.
+4. Reject placeholders, unfinished phrases, and notes such as “need check.”
+5. For multiple choice, evaluate `none`, `all`, combined, and other aggregate options
+   after the individual choices. If all individual choices satisfy or fail the tested
+   property, compare that result with every aggregate option before choosing a label.
+
+Then save the candidate. It is a durable fallback, not a raw first guess: it must be
+complete, internally consistent, and good enough to grade if every later action fails.
+The guarded write must be your first tool call after reading the task. Do not calculate,
+inspect files, install packages, call another tool, or explore before this checkpoint.
 
 ```bash
 python /harbor/skills/stbench-skill/scripts/response_guard.py write \
   --explanation 'BRIEF CURRENT BASIS' --answer 'ONE EXACT ANSWER' --confidence N
 ```
 
-This is provisional. Replace it once only if later evidence changes the conclusion.
+It remains provisional. Replace it at most once when genuinely new evidence changes the
+leader; do not rely on later review to repair a contradiction detectable before writing.
 
 ## 2. Route by evidence type
 
@@ -121,4 +136,6 @@ Confidence: <integer from 0% to 100%>
 
 Use `response_guard.py write-raw` when the task requires another schema. Make
 `response_guard.py validate` (or `--schema nonempty`) the final tool call, then finish.
+The guard rejects incomplete markers and structural defects where deterministic checking
+is possible; it does not prove that the explanation semantically supports the answer.
 Do not continue exploring after validation.

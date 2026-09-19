@@ -367,7 +367,9 @@ def collect_job_results(run_name: str, runs_dir: Path = DEFAULT_RUNS_DIR) -> dic
                 task_id = job_dir.name.rsplit("-", 1)[0]
             score = attempt.get("score")
             if score is None:
-                score = metrics.get("reward", metrics.get("healthbench_raw_score"))
+                score = metrics.get(
+                    "reward", metrics.get("healthbench_raw_score", metrics.get("mean"))
+                )
             jobs.append(
                 {
                     "job": job_dir.name,

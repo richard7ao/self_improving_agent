@@ -99,7 +99,7 @@ class DashboardTests(unittest.TestCase):
                             "n_errored_trials": 0,
                             "n_input_tokens": 20,
                             "n_output_tokens": 5,
-                            "evals": {"test": {"metrics": [{"reward": 0.75}]}},
+                            "evals": {"test": {"metrics": [{"mean": 0.75}]}},
                         },
                     }
                 ),

@@ -21,3 +21,19 @@ uv run python -m dashboard.app --runs-dir /path/to/runs
 ```
 
 The server binds to `127.0.0.1` by default and never writes to run artifacts.
+
+For a terminal snapshot of the newest results and all active evaluations:
+
+```bash
+uv run python scripts/check_results.py
+```
+
+Watch Health, HLE, and TAU3 and print a new snapshot whenever their artifacts change:
+
+```bash
+uv run python scripts/check_results.py --domain health,hle,tau3 --watch 5
+```
+
+Use `--json` for machine-readable output or `--latest 3` to include the three newest
+completed runs per domain. Add `--include-incomplete` when diagnosing abandoned or
+summary-less historical directories. Like the web dashboard, this command is read-only.
