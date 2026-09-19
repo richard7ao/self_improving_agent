@@ -25,6 +25,7 @@ Record: simple/log returns; daily/annual and arithmetic/geometric annualization;
 
 Apply these before computing performance statistics; the task's explicit conventions govern.
 
+- **Trace information before earnings.** Under the task's explicit timing conventions, a position credited with a return interval must use only information available before that interval; a signal using that interval's realized return can earn only a subsequent interval. Trace one signal window, position decision, and earned return to their actual array indices. Apply the specified lag exactly once; do not add a universal one-day shift or change the holding/drift convention.
 - **Accrue returns between trades.** Rebalance dates update holdings; they do not select the return sample. In a daily backtest, calculate P&L on every eligible daily observation, carrying holdings under the specified drift and execution rules. Verify the return dates and row count against the eligible calendar before regression, annualization, or hit rate.
 - **Subtract costs once.** For nonnegative fees expressed in return units, net return equals gross return minus cost return. With holdings fixed, increasing fees cannot improve net returns. Charge costs only where the contract requires them.
 - **Check the actual schedule.** Compare dates with dates, not integer day numbers with timestamps. Inspect selected boundary dates and verify a nonempty schedule when trades are expected; an empty mask must not silently become a zero-return strategy.

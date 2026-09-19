@@ -31,8 +31,10 @@ On the public training task `alpha-hedge-strategy`, the preceding original-base
 accounting skill scored **0/1**; the timing candidate scored **1/1**.
 The timing evaluation recorded **152,676 learner tokens** and estimated learner
 cost **$0.01008204**. This is one task and one attempt per version; it is not a
-held-out result or a confirmed generalization gain. No held-out validation or live
-promotion has occurred.
+held-out result or a confirmed generalization gain. Reserved validation has not occurred. The user subsequently selected this timing
+rule for the active submission, combined with the independently verified numerical
+helper fix. That combined package has not itself been benchmarked; the patch here
+reproduces the exact original timing-only evaluation.
 
 Pre-evaluation checks passed: skill validation, 14 offline helper tests,
 generated-script audit, and a mechanical 12-word overlap scan against all 54 public

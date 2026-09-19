@@ -11,10 +11,13 @@ The run completed normally, with 152,676 tokens and **$0.01008204** recorded cos
 The candidate retains the original references and scripts and adds one instruction
 to trace information availability before crediting returns. Its digest is
 `9e4d063aa0ee93c80002f3f8df149a1d6fb43b6add61d5e33bcac426f1f34977`.
-The reproducible patch is preserved under `docs/qf-candidates/`; reserved validation
-and the corporate-action regression check remain outstanding, so it is not yet
-promoted as a validated submission. The live skill retains the earlier three
-accounting checks. No unsuccessful rewritten candidate has replaced the base.
+The user explicitly selected the best available QF version. The active submission
+now includes this successful timing rule, the earlier accounting checks, and the
+verified numerical fix below. This is a manual selection based on the strongest
+observed tuning result, not an automated validation-gated promotion. Reserved
+validation and the corporate-action regression check remain outstanding. The exact
+previously evaluated candidate remains reproducible under `docs/qf-candidates/`.
+No unsuccessful rewritten candidate has replaced the base.
 
 The original incumbent remains frozen at digest
 `6eee54bacc74a13a422a4578aa2b43ef60545151c972763815922c346b63f92a`.
@@ -41,9 +44,11 @@ The live fix preserves the base and adds a regression covering numerical integra
 call/put symmetry, and finite-difference put delta. All **15 toolkit tests** and
 **44 repository tests** pass. Static skill validation, offline script audit,
 54-instruction exact-overlap scan, and diff checks pass. Live digest:
-`6d52283695d180f4529e927cbcf9bf31f8fad74003e8969ac3dc679a3926ad51`.
+`24d3ff688c71bc1bfe524ba30d639ec9c021aa656e400bc45840d7d4ebae990a`
+(includes the user-selected timing rule).
 This is a verified numerical improvement; no benchmark score gain is attributed
-to this helper change. The timing candidate remains separately reproducible.
+to this helper change. The exact timing-only candidate remains separately reproducible. The combined
+active package has passed offline checks but has not itself been benchmarked.
 
 ## Tested engineering changes
 
@@ -147,7 +152,7 @@ reserved validation tasks under the unchanged learner. Because provider read tim
 parallel runs, let existing work finish and run subsequent evaluations one at a
 time. Do not change pinned inference settings or extend task limits.
 
-If the challenger gains on tuning, check the corporate-action regression case and
-both reserved validation tasks against valid incumbent attempts. Otherwise retain
-the incumbent. A larger fresh training confirmation is required before claiming
+Check the active version on the corporate-action regression case and both
+reserved validation tasks against valid incumbent attempts; reassess the manual
+selection if confirmation shows a regression. A larger fresh training confirmation is required before claiming
 broad QF improvement; local results cannot guarantee held-out leaderboard gains.
