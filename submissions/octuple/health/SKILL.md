@@ -84,6 +84,17 @@ A complete non-empty response must already exist before any optional tool call. 
 optional tool unless the user's explicit calculation or format request requires more. All tools are
 offline, deterministic, and transform only supplied inputs; none establishes medical correctness.
 
+Prefer the combined finalizer when more than one check applies. Put `draft` plus only the applicable
+optional contracts in one JSON payload, then run:
+
+`python /harbor/skills/stbench-skill/scripts/health_tool.py finalize --input /tmp/health-payload.json`
+
+That single call validates the input, atomically delivers the non-empty draft, runs requested form,
+evidence, certainty, coverage, and urgency-structure checks, and returns compact JSON. Warning-only
+findings never erase a delivered answer. Revise once only when the report identifies a material
+issue, then call the same finalizer again. This is the normal four-iteration budget: draft and save,
+finalize, revise if necessary, verify and finish.
+
 - Evidence-state conflicts: `scripts/quality/evidence_ledger.py`
 - Unsupported certainty warning: `scripts/quality/claim_audit.py`
 - Requested concepts or clauses: `scripts/quality/coverage_check.py`
