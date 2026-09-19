@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -208,6 +209,28 @@ def _agent_logs_show_budget_exhausted(trial_dir: Path) -> bool:
     return False
 
 
+def _agent_logs_show_upstream_failure(trial_dir: Path) -> bool:
+    """Recognize provider exceptions when Harbor also wrote a fallback zero.
+
+    A failed solution command is not a failed agent process. Only use explicit
+    provider exception lines together with Harbor's nonzero-agent-exit error.
+    """
+    marker = re.compile(
+        r"(?m)^(?:litellm\.exceptions|openai)\."
+        r"(?:APIError|APIConnectionError|APITimeoutError|RateLimitError|"
+        r"InternalServerError|ServiceUnavailableError):"
+    )
+    for path in (trial_dir / "agent").rglob("*"):
+        if not path.is_file() or path.suffix not in {".txt", ".log"} or path.stat().st_size > 5_000_000:
+            continue
+        try:
+            if marker.search(path.read_text(encoding="utf-8", errors="ignore")):
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def attempt_from_trial(task: Task, trial_dir: Path, result: dict) -> dict:
     """Turn a Harbor trial (result.json + verifier files) into an attempt record."""
     base = {"task_id": task.id, "answer": "", "artifacts": {"trial_dir": str(trial_dir)}}
@@ -237,6 +260,11 @@ def attempt_from_trial(task: Task, trial_dir: Path, result: dict) -> dict:
         return {**base, "status": "infra_error", "error_class": "harbor_inconsistent_reward_status"}
     if isinstance(exc, dict) and exc:
         exc_type = str(exc.get("exception_type") or "unknown")
+        if (not has_reward or reward < 1.0) and _agent_logs_show_budget_exhausted(trial_dir):
+            return {**base, "status": "budget_exhausted", "error_class": "runtime_budget_exhausted"}
+        if (has_reward and reward < 1.0 and exc_type == "NonZeroAgentExitCodeError"
+                and _agent_logs_show_upstream_failure(trial_dir)):
+            return {**base, "status": "infra_error", "error_class": "runtime_upstream_failure"}
         if not has_reward and not (task.fractional and status_file == "invalidated"):
             status = "timeout" if "timeout" in exc_type.lower() else "infra_error"
             return {**base, "status": status, "error_class": f"harbor_exception:{exc_type}"[:120]}

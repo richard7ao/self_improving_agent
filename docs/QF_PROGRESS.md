@@ -56,6 +56,41 @@ The paired development evaluation is running at
 `runs/qf-development-20260919T151534Z/` on `alpha-hedge-strategy` and
 `asian-option-levy-curran`, using the same frozen skill and concurrency 1.
 
+An additional paired development run on `13f-amendment-aware-crowding` is at
+`runs/qf-filings-20260919T151938Z/`. It also uses concurrency 1; at most two
+learner containers run across the two evaluations, after checking actual memory
+usage. Alpha strategy completed with placebo **0/1** and skill **0/1**, both
+without infrastructure exceptions. The skill solution added a positive cost
+series to returns, so schema/repeatability checks did not establish financial
+correctness.
+
+The isolated candidate additionally makes the signal information timeline and
+full-calendar rebalance boundaries explicit. It passed the generated-script audit
+and a verbatim 12-word overlap scan against all public QF instructions. These
+checks do not establish benchmark improvement or prove absence of all leakage.
+
+A second isolated candidate at
+`runs/qf-temporal-cost-candidate-20260919T1530/skill/` adds an explicit cost-sign
+identity, fee-monotonicity check, and tested `net_of_costs` helper. Its 16 offline
+tests, script audit, and verbatim-overlap scan pass. It is not promoted. Its split
+is fixed: corporate actions and alpha strategy for tuning; Asian options and
+filing reconstruction for validation.
+
+## Runtime invalidation discovered during development
+
+The filing placebo crashed with an upstream `litellm.exceptions.APIError` and
+`NonZeroAgentExitCodeError`. Harbor nevertheless emitted a verifier reward of
+zero. The earlier harness accepted that fallback as a scored failure.
+
+The adapter now recognizes explicit provider exception lines accompanying a
+nonzero agent exit and a failing reward, and routes those attempts through the
+existing infrastructure retry path. Ordinary wrong answers are still not
+retried; budget exhaustion remains a stop condition. All 38 repository tests
+pass, including these cases. The original filing attempt is recorded in
+`runs/qf-filings-20260919T151938Z/infrastructure-invalidations.json` and must be
+excluded from comparisons and rerun. The already-running process uses the old
+adapter, so its raw aggregate must not be quoted as a valid paired score.
+
 No candidate has been promoted. The one-task smoke is a tie and does not
 establish generalization. Broader or fresh-family confirmation remains required
 before any leaderboard claim.
