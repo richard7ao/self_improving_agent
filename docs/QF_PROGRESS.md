@@ -1,166 +1,111 @@
 # QF development — 2026-09-19
 
-The current objective is to improve the frozen QF learner's pass rate over the
-placebo arm on public training tasks. The learner, benchmark scoring, and
-`hackathon.toml` are unchanged.
+## Current conclusion
 
-## Evaluation readiness
+No measured skill improvement has been established and no candidate has been
+promoted. The live QF skill matches the frozen incumbent used in the initial
+comparisons (digest `6eee54bacc74a13a422a4578aa2b43ef60545151c972763815922c346b63f92a`).
+The strongest completed challenger finished normally but failed alpha strategy.
+The next hypothesis separates daily return accrual from monthly holdings updates.
 
-The starting checkout was `96b8d96`, which already fixes CSV NaN detection.
-This development batch addresses two additional blockers:
+The user authorized pulling, consolidating, pushing, and continued work. Pulling
+`origin/main` into `codex/qf-evaluation-and-tools` found no newer upstream changes.
+Only source, submission tooling fixes, tests, and this report are tracked;
+credentials, datasets, candidates, and detailed run evidence remain local/ignored.
 
-- QF attempts intentionally leave the textual `answer` field empty. Delivery
-  reporting and reviewer failure classification now use the benchmark identity
-  and verifier/runtime outcomes instead of labeling every QF attempt as an
-  undelivered answer. Legacy task IDs and saved QF evaluation reports are covered.
-  HealthBench's empty-answer detection remains enabled.
-- The QF toolkit no longer imports `subprocess` or launches a solution. It writes
-  and compares output fingerprints, while the learner reruns its solution through
-  its existing terminal tool. Complete candidates retaining the toolkit now pass
-  the optimizer's generated-script audit.
+## Tested engineering changes
 
-Regression coverage includes passing and failing QF verifier outcomes, runtime
-errors, tune-only reviewer evidence, complete candidate materialization, and
-fingerprint detection of changed, added, and removed files.
+- QF is graded from generated artifacts. Empty textual answers no longer become
+  false delivery failures in reports or optimizer reviews. Health text checks remain.
+- QF repeatability checks use output fingerprints instead of launching subprocesses,
+  so the complete skill passes the optimizer script audit.
+- Confirmed provider crashes with fallback verifier zeros enter infrastructure retry
+  handling rather than being silently accepted as wrong answers.
+- Completed gateway calls are persisted during evaluation. Unknown costs for charged
+  transport failures correctly mark total cost as incomplete.
 
-## Training data and initial experiment
+Commits: `a01a129`, `635f879`, `b87de7f`, `f386cf2`.
+Verification: **43 repository tests pass**, **14 live-toolkit tests pass**, live skill
+static check passes (8 files, 48,814 bytes), and `git diff --check` passes.
+The period-boundary challenger has **20 passing offline tests**, a clean generated
+script audit, and no 12-word verbatim overlap with the 54 public instructions.
 
-All 54 QF public training tasks were downloaded from
-`armin-aptura/skilltrainbench-public` at revision
-`9d6f3a635bd9464d1930516215c760b2ebc213cd`. Other domains were not downloaded.
-Source data and benchmark files remain under ignored `dataset/`.
+The pinned learner, task limits, scoring, and `hackathon.toml` are unchanged.
+Timeouts with confirmed transport failures still need manual exclusion when the
+legacy gateway ledger cannot reliably attribute events to individual attempts.
+An ordinary learner failure is never retried merely to improve its score.
 
-Initial paired pipeline smoke:
+## Public training evidence
 
-- Task: `corporate-action-adjustment`.
-- Arms: placebo and skill; concurrency 1.
-- Evidence: `runs/qf-smoke-20260919T145953Z/`.
-- The run saves a frozen skill folder, its digest, a manifest, and the source diff.
-- Planned next development tasks: `alpha-hedge-strategy` and
-  `asian-option-levy-curran`, using the same frozen skill and paired arms.
+All 54 QF tasks are available from `armin-aptura/skilltrainbench-public`, revision
+`9d6f3a635bd9464d1930516215c760b2ebc213cd`. Other domains were not downloaded;
+that explains the doctor's global dataset-completeness failure. Docker, API
+credentials, and tiny Runware/OpenAI inference probes passed.
 
-The smoke completed with placebo **1/1**, skill **1/1**, and net gain **0**.
-Recorded learner usage was 284,060 tokens and estimated cost **$0.01959858**;
-this excludes the separate doctor inference probes. Both arms correctly report
-zero text-delivery failures. The placebo used 6 tool calls; the skill used 16.
-The learner's own trajectory cost field reports zero, so costs above come from
-the metered evaluation ledger instead.
+Fixed split: corporate actions and alpha strategy for tuning; Asian options and
+filing reconstruction for validation. Validation solutions were not used to
+write candidates. No no-skill baseline arm was run; placebo is the comparison.
+Promotion requires strict improvement on the task-weighted aggregate and reserved
+validation scores, never a tie.
 
-The skill initially made a nearest-prior date lookup error, then corrected it.
-It also spent actions repairing ad hoc verification code. A general as-of helper
-and boundary-check candidate is isolated in
-`runs/qf-asof-candidate-20260919T1510/skill/`; its 15 offline tests pass, but it
-has not been evaluated or promoted. It contains no task-specific answers.
+| Task | Placebo | Incumbent skill | Valid conclusion |
+|---|---|---|---|
+| `corporate-action-adjustment` | pass | pass | tie |
+| `alpha-hedge-strategy` | fail | fail | tie |
+| `asian-option-levy-curran` | API crash; replacement running | timeout with transport failures | inconclusive |
+| `13f-amendment-aware-crowding` | replacement failed normally | timeout with transport failures | inconclusive |
 
-The paired development evaluation is running at
-`runs/qf-development-20260919T151534Z/` on `alpha-hedge-strategy` and
-`asian-option-levy-curran`, using the same frozen skill and concurrency 1.
+The original options and filing raw zero/zero reports must not be quoted as clean
+paired comparisons. Their invalidations are recorded alongside the run evidence.
 
-An additional paired development run on `13f-amendment-aware-crowding` is at
-`runs/qf-filings-20260919T151938Z/`. Each evaluation uses concurrency 1.
-The initial two evaluations were later joined by candidate and infrastructure
-replacement runs, with at most four learner containers after checking actual
-memory usage. Alpha strategy completed with placebo **0/1** and skill **0/1**, both
-without infrastructure exceptions. The skill solution added a positive cost
-series to returns, so schema/repeatability checks did not establish financial
-correctness.
+## Experiments and recorded cost
 
-The isolated candidate additionally makes the signal information timeline and
-full-calendar rebalance boundaries explicit. It passed the generated-script audit
-and a verbatim 12-word overlap scan against all public QF instructions. These
-checks do not establish benchmark improvement or prove absence of all leakage.
+Paths below are under ignored `runs/`. Costs are the recorded estimates for
+successfully priced calls; entries marked incomplete exclude unknown failed-call
+charges. Separate doctor probes are not included.
 
-A second isolated candidate at
-`runs/qf-temporal-cost-candidate-20260919T1530/skill/` adds an explicit cost-sign
-identity, fee-monotonicity check, and tested `net_of_costs` helper. Its 16 offline
-tests, script audit, and verbatim-overlap scan pass. It is not promoted. Its split
-is fixed: corporate actions and alpha strategy for tuning; Asian options and
-filing reconstruction for validation.
+| Run directory | Outcome | Recorded USD |
+|---|---|---:|
+| `qf-smoke-20260919T145953Z/evaluation` | corporate actions 1/1 in both arms; 284,060 tokens | 0.01959858 |
+| `qf-development-20260919T151534Z/evaluation` | valid alpha 0/0; both options arms contaminated by infrastructure | 0.03639786, incomplete |
+| `qf-filings-20260919T151938Z/evaluation` | placebo API crash; skill timeout with two long read timeouts | 0.02430515, incomplete |
+| `qf-filing-placebo-retry-20260919T155039Z/evaluation` | valid placebo 0/1; 58,701 tokens | 0.00455863 |
+| `qf-temporal-cost-candidate-20260919T1530/eval-alpha` | inconclusive: two 600-second read failures consumed most of the agent limit | 0.01514160, incomplete |
+| `qf-astra-concise-20260919T155138Z/eval-alpha` | inconclusive: read timeout and repeated HTTP 429 responses before agent timeout | 0.01494540, incomplete |
+| `qf-astra-period-boundary-20260919T161307Z/eval-alpha` | normal completion, score 0/1; 336,556 tokens; rejected for no gain | 0.02028193 |
+| `qf-asian-placebo-retry-20260919T160833Z/evaluation` | replacement still running | pending |
 
-Its alpha run ended with `AgentTimeoutError` and a raw reward of zero, but the
-gateway ledger shows two confirmed `ReadTimeout` failures lasting approximately
-600 seconds each. Those failures consumed about 20 minutes of the task's
-30-minute agent limit. This is an **inconclusive infrastructure-contaminated
-result** that does not isolate candidate quality.
-The raw evidence is retained alongside `infrastructure-invalidations.json`.
-Recorded successfully priced calls cost **$0.01514160**. Charges for the failed
-calls are unknown; the old report's `incomplete: false` was misleading because
-its check omitted fail-closed error rows. Nothing was promoted.
+Older raw reports incorrectly mark some transport-failure costs complete; the
+new cost-reporting fix corrects future runs without overwriting old evidence.
 
-The last executed solution did contain an independently identifiable bug: its
-rebalance mask compared integer day numbers with full datetime values. No dates
-matched, positions stayed zero, performance ratios became undefined, and strict
-JSON serialization failed. Cost subtraction was correct in this attempt. The
-next isolated candidate addresses the calendar operation with a tested generic
-period-boundary helper; it does not encode task-specific dates or parameters.
+## What the tuning trajectories taught us
 
-## Runtime invalidation discovered during development
+1. The incumbent added a nonnegative fee series to gross returns. The temporal
+   candidate introduced explicit net-return subtraction and fee monotonicity checks.
+2. That candidate then compared integer day numbers with datetime values when
+   constructing a rebalance mask. No dates matched; zero returns led to undefined
+   ratios and JSON failure. The period-boundary helper fixes this operation.
+3. The latest challenger constructed its calendar correctly but calculated P&L only
+   on rebalance dates, dropping intervening daily returns from regression and
+   performance statistics. Holdings update frequency and return accrual frequency
+   must be kept separate. This is the next focused change.
 
-The filing placebo crashed with an upstream `litellm.exceptions.APIError` and
-`NonZeroAgentExitCodeError`. Harbor nevertheless emitted a verifier reward of
-zero. The earlier harness accepted that fallback as a scored failure.
+Some signal and sizing conventions in the public alpha task are underspecified.
+These ambiguities do not explain the concrete return-sampling bug. Candidates
+must teach general methods, not memorize task constants or expected outputs.
 
-The adapter now recognizes explicit provider exception lines accompanying a
-nonzero agent exit and a failing reward, and routes those attempts through the
-existing infrastructure retry path. Ordinary wrong answers are still not
-retried; budget exhaustion remains a stop condition. All 38 repository tests
-pass, including these cases. The original filing attempt is recorded in
-`runs/qf-filings-20260919T151938Z/infrastructure-invalidations.json` and must be
-excluded from comparisons and rerun. The already-running process uses the old
-adapter, so its raw aggregate must not be quoted as a valid paired score.
+The standalone synthetic-timing candidate at
+`qf-astra-tune-20260919T155123Z/skill` passed offline checks but was not evaluated.
+The concise and period-boundary candidates remain isolated and unpromoted.
 
-The replacement filing placebo completed normally at
-`runs/qf-filing-placebo-retry-20260919T155039Z/evaluation/`: **0/1**, 58,701
-tokens, estimated learner cost **$0.00455863**, fully priced. This replacement
-was for a confirmed infrastructure failure, not a retry of a wrong answer.
-The incumbent filing skill later ended with `AgentTimeoutError`. Its last two
-gateway events were read timeouts lasting roughly 600 and 631 seconds. That
-skill result is also inconclusive and excluded; the raw paired zero/zero report
-is not valid evidence of candidate quality. The original filing evaluation
-records **$0.02430515** in priced calls, with failed-call costs unknown.
+## Next work
 
-The Asian-option placebo also crashed with an explicit upstream provider error.
-Its fallback zero is excluded in
-`runs/qf-development-20260919T151534Z/infrastructure-invalidations.json`.
-The original evaluation proceeded to the skill arm under the old adapter; a new
-placebo attempt is running at
-`runs/qf-asian-placebo-retry-20260919T160833Z/evaluation/` for a valid comparison.
+Prepare a small daily-accrual candidate, then test alpha under the unchanged
+learner. Because provider read timeouts and HTTP 429 responses contaminated
+parallel runs, let existing work finish and run subsequent evaluations one at a
+time. Do not change pinned inference settings or extend task limits.
 
-## Parallel Astra review
-
-The user authorized Astra agents at high reasoning for parallel work. Two
-isolated candidates were prepared from the frozen temporal-cost candidate:
-
-- `runs/qf-astra-tune-20260919T155123Z/skill/`: adds a small synthetic timing
-  trace and causal perturbation checks. Changes only the entry point and the
-  portfolio reference. Static checks, script audit, 16 helper tests, and a
-  mechanical 12-word overlap scan against public instructions pass. It has not
-  been benchmark-evaluated.
-- `runs/qf-astra-concise-20260919T155138Z/skill/`: shortens the entry point from
-  8,167 to 5,226 bytes while retaining the helpers and references. The hypothesis
-  is that conditional support and fewer mandatory checks reduce distraction.
-  Static checks and 16 helper tests pass. An alpha-only tune evaluation is running.
-- `runs/qf-astra-period-boundary-20260919T161307Z/skill/`: extends the concise
-  candidate with `period_start_indices` and explicit first-row handling, plus
-  schedule coverage and date-type checks. All 20 helper tests, static checks,
-  script audit, and the overlap check pass. Its alpha evaluation is running with
-  live gateway ledger persistence.
-
-Neither agent inspected reserved validation solutions for candidate development.
-The split remains corporate actions plus alpha for tuning, Asian options plus
-filings for validation. No candidate is promoted on a tune result alone.
-
-A read-only runtime audit found responsive gateways, spare CPU and memory, and
-adequate token budgets. Several model responses took much longer than the initial
-smoke, whose 20 API calls had median latency 27 seconds and maximum 56 seconds.
-The current delays cannot be attributed to local compute saturation. Pinned
-learner settings and task limits remain unchanged.
-
-Commit `f386cf2` persists completed gateway-call metadata during evaluations and
-corrects incomplete-cost reporting for charged errors. All 43 repository tests
-pass. This changes observability only; timeout classification still requires
-careful review where per-attempt gateway attribution is unavailable.
-
-No candidate has been promoted. The one-task smoke is a tie and does not
-establish generalization. Broader or fresh-family confirmation remains required
-before any leaderboard claim.
+If the challenger gains on tuning, check the corporate-action regression case and
+both reserved validation tasks against valid incumbent attempts. Otherwise retain
+the incumbent. A larger fresh training confirmation is required before claiming
+broad QF improvement; local results cannot guarantee held-out leaderboard gains.
