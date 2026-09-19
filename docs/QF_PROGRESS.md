@@ -57,9 +57,10 @@ The paired development evaluation is running at
 `asian-option-levy-curran`, using the same frozen skill and concurrency 1.
 
 An additional paired development run on `13f-amendment-aware-crowding` is at
-`runs/qf-filings-20260919T151938Z/`. It also uses concurrency 1; at most two
-learner containers run across the two evaluations, after checking actual memory
-usage. Alpha strategy completed with placebo **0/1** and skill **0/1**, both
+`runs/qf-filings-20260919T151938Z/`. Each evaluation uses concurrency 1.
+The initial two evaluations were later joined by candidate and infrastructure
+replacement runs, with at most four learner containers after checking actual
+memory usage. Alpha strategy completed with placebo **0/1** and skill **0/1**, both
 without infrastructure exceptions. The skill solution added a positive cost
 series to returns, so schema/repeatability checks did not establish financial
 correctness.
@@ -76,6 +77,23 @@ tests, script audit, and verbatim-overlap scan pass. It is not promoted. Its spl
 is fixed: corporate actions and alpha strategy for tuning; Asian options and
 filing reconstruction for validation.
 
+Its alpha run ended with `AgentTimeoutError` and a raw reward of zero, but the
+gateway ledger shows two confirmed `ReadTimeout` failures lasting approximately
+600 seconds each. Those failures consumed about 20 minutes of the task's
+30-minute agent limit. This is an **inconclusive infrastructure-contaminated
+result** that does not isolate candidate quality.
+The raw evidence is retained alongside `infrastructure-invalidations.json`.
+Recorded successfully priced calls cost **$0.01514160**. Charges for the failed
+calls are unknown; the old report's `incomplete: false` was misleading because
+its check omitted fail-closed error rows. Nothing was promoted.
+
+The last executed solution did contain an independently identifiable bug: its
+rebalance mask compared integer day numbers with full datetime values. No dates
+matched, positions stayed zero, performance ratios became undefined, and strict
+JSON serialization failed. Cost subtraction was correct in this attempt. The
+next isolated candidate addresses the calendar operation with a tested generic
+period-boundary helper; it does not encode task-specific dates or parameters.
+
 ## Runtime invalidation discovered during development
 
 The filing placebo crashed with an upstream `litellm.exceptions.APIError` and
@@ -90,6 +108,58 @@ pass, including these cases. The original filing attempt is recorded in
 `runs/qf-filings-20260919T151938Z/infrastructure-invalidations.json` and must be
 excluded from comparisons and rerun. The already-running process uses the old
 adapter, so its raw aggregate must not be quoted as a valid paired score.
+
+The replacement filing placebo completed normally at
+`runs/qf-filing-placebo-retry-20260919T155039Z/evaluation/`: **0/1**, 58,701
+tokens, estimated learner cost **$0.00455863**, fully priced. This replacement
+was for a confirmed infrastructure failure, not a retry of a wrong answer.
+The incumbent filing skill later ended with `AgentTimeoutError`. Its last two
+gateway events were read timeouts lasting roughly 600 and 631 seconds. That
+skill result is also inconclusive and excluded; the raw paired zero/zero report
+is not valid evidence of candidate quality. The original filing evaluation
+records **$0.02430515** in priced calls, with failed-call costs unknown.
+
+The Asian-option placebo also crashed with an explicit upstream provider error.
+Its fallback zero is excluded in
+`runs/qf-development-20260919T151534Z/infrastructure-invalidations.json`.
+The original evaluation proceeded to the skill arm under the old adapter; a new
+placebo attempt is running at
+`runs/qf-asian-placebo-retry-20260919T160833Z/evaluation/` for a valid comparison.
+
+## Parallel Astra review
+
+The user authorized Astra agents at high reasoning for parallel work. Two
+isolated candidates were prepared from the frozen temporal-cost candidate:
+
+- `runs/qf-astra-tune-20260919T155123Z/skill/`: adds a small synthetic timing
+  trace and causal perturbation checks. Changes only the entry point and the
+  portfolio reference. Static checks, script audit, 16 helper tests, and a
+  mechanical 12-word overlap scan against public instructions pass. It has not
+  been benchmark-evaluated.
+- `runs/qf-astra-concise-20260919T155138Z/skill/`: shortens the entry point from
+  8,167 to 5,226 bytes while retaining the helpers and references. The hypothesis
+  is that conditional support and fewer mandatory checks reduce distraction.
+  Static checks and 16 helper tests pass. An alpha-only tune evaluation is running.
+- `runs/qf-astra-period-boundary-20260919T161307Z/skill/`: extends the concise
+  candidate with `period_start_indices` and explicit first-row handling, plus
+  schedule coverage and date-type checks. All 20 helper tests, static checks,
+  script audit, and the overlap check pass. Its alpha evaluation is running with
+  live gateway ledger persistence.
+
+Neither agent inspected reserved validation solutions for candidate development.
+The split remains corporate actions plus alpha for tuning, Asian options plus
+filings for validation. No candidate is promoted on a tune result alone.
+
+A read-only runtime audit found responsive gateways, spare CPU and memory, and
+adequate token budgets. Several model responses took much longer than the initial
+smoke, whose 20 API calls had median latency 27 seconds and maximum 56 seconds.
+The current delays cannot be attributed to local compute saturation. Pinned
+learner settings and task limits remain unchanged.
+
+Commit `f386cf2` persists completed gateway-call metadata during evaluations and
+corrects incomplete-cost reporting for charged errors. All 43 repository tests
+pass. This changes observability only; timeout classification still requires
+careful review where per-attempt gateway attribution is unavailable.
 
 No candidate has been promoted. The one-task smoke is a tie and does not
 establish generalization. Broader or fresh-family confirmation remains required
