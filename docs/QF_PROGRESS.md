@@ -2,11 +2,22 @@
 
 ## Current conclusion
 
-No measured skill improvement has been established and no candidate has been
-promoted. The live QF skill matches the frozen incumbent used in the initial
-comparisons (digest `6eee54bacc74a13a422a4578aa2b43ef60545151c972763815922c346b63f92a`).
-The strongest completed challenger finished normally but failed alpha strategy.
-The next hypothesis separates daily return accrual from monthly holdings updates.
+No measured score improvement has been established. The strongest completed
+challenger finished normally but failed alpha strategy. Under the user's explicit
+five-minute request to improve while preserving the original base, the live skill
+now adds only three backtest accounting checks: daily return coverage, subtraction
+of nonnegative fees, and type-aligned calendar checks. All original references,
+scripts, routing, and other guidance remain intact. This narrow correctness edit
+is **not a benchmark-validated promotion** of the unsuccessful rewritten candidates.
+
+The original incumbent remains frozen at digest
+`6eee54bacc74a13a422a4578aa2b43ef60545151c972763815922c346b63f92a`.
+The updated live skill digest is
+`780b8dee56d093dce29f210f32c77e07e4c3e25532d2c07f38ac2fd3d09ba635`.
+All 43 repository tests and 14 live-toolkit tests pass; static validation and the
+54-instruction overlap check are clean. Evaluation is queued sequentially at
+`runs/qf-astra-daily-accrual-20260919T164105Z/eval-alpha`; its unused concise
+candidate is preserved as `skill-concise-unrun` alongside the new base snapshot.
 
 The user authorized pulling, consolidating, pushing, and continued work. Pulling
 `origin/main` into `codex/qf-evaluation-and-tools` found no newer upstream changes.
@@ -26,7 +37,7 @@ credentials, datasets, candidates, and detailed run evidence remain local/ignore
 
 Commits: `a01a129`, `635f879`, `b87de7f`, `f386cf2`.
 Verification: **43 repository tests pass**, **14 live-toolkit tests pass**, live skill
-static check passes (8 files, 48,814 bytes), and `git diff --check` passes.
+static check passes (8 files, 49,794 bytes), and `git diff --check` passes.
 The period-boundary challenger has **20 passing offline tests**, a clean generated
 script audit, and no 12-word verbatim overlap with the 54 public instructions.
 
@@ -100,7 +111,7 @@ The concise and period-boundary candidates remain isolated and unpromoted.
 
 ## Next work
 
-Prepare a small daily-accrual candidate, then test alpha under the unchanged
+Test the minimal original-base accounting edit on alpha under the unchanged
 learner. Because provider read timeouts and HTTP 429 responses contaminated
 parallel runs, let existing work finish and run subsequent evaluations one at a
 time. Do not change pinned inference settings or extend task limits.

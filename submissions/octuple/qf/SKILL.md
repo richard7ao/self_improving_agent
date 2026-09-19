@@ -21,6 +21,14 @@ The deliverable is an executable implementation and every required artifact—no
 
 Record: simple/log returns; daily/annual and arithmetic/geometric annualization; variance/volatility; population/sample (`ddof=0/1`); calendar/trading days; inclusive/exclusive windows; price/total return; gains/losses and left/right tail; decimal/percent/bps/pips; covariance and risk-free frequency; net sum/gross exposure; label order/matrix orientation; fitted-state relabeling; convergence before/after update; zero/one-based indexing; and signed drawdown/positive magnitude. Never infer a convention the task states.
 
+## Backtest accounting checks
+
+Apply these before computing performance statistics; the task's explicit conventions govern.
+
+- **Accrue returns between trades.** Rebalance dates update holdings; they do not select the return sample. In a daily backtest, calculate P&L on every eligible daily observation, carrying holdings under the specified drift and execution rules. Verify the return dates and row count against the eligible calendar before regression, annualization, or hit rate.
+- **Subtract costs once.** For nonnegative fees expressed in return units, net return equals gross return minus cost return. With holdings fixed, increasing fees cannot improve net returns. Charge costs only where the contract requires them.
+- **Check the actual schedule.** Compare dates with dates, not integer day numbers with timestamps. Inspect selected boundary dates and verify a nonempty schedule when trades are expected; an empty mask must not silently become a zero-return strategy.
+
 ## Routed references
 
 - Read [references/contract-and-delivery.md](references/contract-and-delivery.md) for every task, especially multi-file outputs or ambiguous execution/test commands.
