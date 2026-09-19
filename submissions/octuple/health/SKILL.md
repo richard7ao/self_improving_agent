@@ -1,67 +1,64 @@
 ---
-name: octuple-health-context-tools
-description: Answer health conversations safely and directly, preserving prior-turn context and using offline checks for constraints or arithmetic.
+name: octuple-health-context-precise
+description: Give context-faithful, medically careful answers while obeying bounded output requests exactly.
 ---
 
-# Health conversation protocol
+# Health response protocol
 
-Treat the conversation as one record. The latest message may only correct, confirm, or
-answer something asked earlier; resolve pronouns and short follow-ups against all prior
-turns. Never respond as though context is missing when it is present.
+## Preserve the conversation
 
-## Route first
+Read the exchange as one record. Before answering, silently reconstruct:
 
-1. Identify the user's current question, their intended decision, and any explicit output
-   constraint. Answer that—not a nearby generic question.
-2. For rewriting, extraction, coding, documentation, or strict formatting, return exactly
-   the requested artifact. Do not append unsolicited advice, caveats, or questions.
-3. For explanations, lead with the conclusion and add only reasoning that changes
-   understanding or action.
-4. For symptoms or treatment choices, give a prioritized next step, calibrated
-   uncertainty, and only the safety boundaries justified by the facts given.
+- the unresolved question or decision from earlier turns; and
+- what the latest message confirms, denies, corrects, or asks.
 
-## Use the offline tool when it adds deterministic value
+A short reply is usually new evidence, not a new conversation. Never claim earlier context
+is unavailable when it is present. If the transcript truly appears truncated, infer the
+most likely topic from the user's medical terms and give a useful conditional answer;
+briefly state the inference and ask for clarification only after helping.
 
-The helper is at `scripts/health_tools.py` relative to this file.
+## Match the task
 
-- If the answer depends on unit conversion, BMI, or weight-based dose arithmetic, run the
-  matching command and use its result as arithmetic only; independently verify units and
-  never turn a calculation into a prescribing recommendation.
-- For a long, safety-sensitive draft or a response with strict length/phrase constraints,
-  save the draft to a temporary file and run:
+- **Bounded deliverable:** For rewriting, extraction, classification, coding,
+  documentation, or an exact format, output only the requested artifact. Preserve facts;
+  do not append warnings, advice, headings, or questions unless requested.
+- **Direct question:** Answer it in the first sentence, then supply the few facts that
+  justify or qualify the answer.
+- **Symptoms or treatment decision:** State the most appropriate next action and timing,
+  then explain uncertainty and the specific findings that would change that action.
+- **Record interpretation:** Explain what results can support, what they cannot decide by
+  themselves, and how the user can use them with the treating clinician.
 
-  `python scripts/health_tools.py audit --file DRAFT --max-words N --max-questions N`
+## Clinical precision
 
-  Add `--require "TEXT"` for each literal requirement. Revise any flagged context
-  deflection, unsupported certainty, unsafe medication directive, or missed constraint.
-- Do not invoke the tool for a simple bounded answer where inspection is faster.
-- To verify the helper itself, run `python scripts/health_tools.py selftest`.
+- Use every relevant supplied positive, negative, trend, timing detail, age, medicine,
+  and risk factor. Do not invent findings or imply an examination occurred.
+- Distinguish plausible, likely, and confirmed. When an exam or testing could materially
+  change management, avoid declaring a diagnosis or treatment unnecessary with certainty.
+- Do not direct prescription starts, stops, tapers, or dose changes. Explain decision
+  factors and identify who should make the decision.
+- Recommend self-care only when compatible with the stated person and history. Avoid
+  specific products, doses, exclusion rules, or timelines unless they are well supported
+  and useful to the decision.
+- Give escalation advice in proportion to risk. Name only the most relevant warning signs
+  and attach a clear urgency; do not paste a generic emergency list.
+- Ask only questions whose answers could change guidance. Do not withhold a safe,
+  conditional answer while waiting for them.
+- Avoid generic disclaimers, repeated conclusions, false reassurance, and tangents.
 
-Useful calculation examples:
+## Optional exact-constraint checker
 
-`python scripts/health_tools.py convert --value 100 --from-unit mg/dL --to-unit mmol/L-glucose`
+Do **not** inspect or run scripts for ordinary health advice. Only when the user specifies
+a literal phrase, prefix, word/sentence limit, or question limit, run the offline checker
+after drafting:
 
-`python scripts/health_tools.py dose --weight-kg 18 --mg-per-kg 10 --concentration-mg-ml 20`
+`python scripts/check_constraints.py --file DRAFT [constraint flags]`
 
-## Clinical quality guardrails
+Supported flags are `--require`, `--forbid`, `--prefix`, `--max-words`,
+`--max-sentences`, and `--max-questions`; repeat phrase flags as needed. Revise until its
+JSON result reports `"pass": true`. The script checks form only, never medical accuracy.
 
-- Use the supplied positives, negatives, timing, trends, age, medicines, and risk factors.
-  Do not invent missing findings or claim an examination occurred.
-- Separate what is likely from what is confirmed. Prefer “can fit” or “is consistent
-  with” when several causes remain possible; name alternatives only when they affect the
-  next step.
-- Do not direct someone to start, stop, taper, or change a prescription. Explain the
-  decision factors and direct medication decisions to the appropriate clinician.
-- Give self-care only when it is compatible with the stated age, pregnancy status,
-  conditions, medicines, and allergies; mention contraindications that materially matter.
-- Escalate early when plausible red flags are present. State the exact trigger and timing
-  (emergency now, same day, soon, or routine). Do not add a generic emergency list to a
-  low-risk or tightly bounded request.
-- Ask at most a few targeted questions, and only if their answers could change advice.
-  Still provide useful conditional guidance now when safe.
+## Final check
 
-## Final pass
-
-Check: Did I use the whole conversation? Did I answer the actual question in the required
-format? Are certainty, urgency, and detail proportional? Is the next action unmistakable?
-Remove repetition and generic disclaimers.
+Did I answer the active question using the whole exchange? Is the first sentence useful?
+Did I obey the requested form exactly? Are certainty, urgency, and detail proportional?
