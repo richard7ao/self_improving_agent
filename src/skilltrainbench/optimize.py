@@ -273,7 +273,9 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
                            task_ids: list[str] | None, limit: int | None,
                            validation_fraction: float, min_improvement: float, seed: int,
                            optimizer_model: str | None, upstream_base_url: str, upstream_key: str,
-                           concurrency: int | None, candidate_parallelism: int | None = None,
+                           concurrency: int | None,
+                           optimizer_base_url: str | None = None, optimizer_key: str | None = None,
+                           candidate_parallelism: int | None = None,
                            keep_candidates: bool = False) -> dict:
     if iterations < 1 or candidates < 1:
         raise ValueError("--iterations and --candidates must be positive")
@@ -302,8 +304,9 @@ async def run_optimization(cfg: HackathonCfg, domain_name: str, *, skill_dir: st
         "seed": seed, "split": {"tune": split.tune, "validation": split.validation}, "rounds": [],
     }
 
-    headers = {"authorization": f"Bearer {upstream_key}"}
-    async with httpx.AsyncClient(base_url=upstream_base_url.rstrip("/"), headers=headers, timeout=600.0) as client:
+    optimizer_base = (optimizer_base_url or upstream_base_url).rstrip("/")
+    headers = {"authorization": f"Bearer {optimizer_key or upstream_key}"}
+    async with httpx.AsyncClient(base_url=optimizer_base, headers=headers, timeout=600.0) as client:
         print("evaluating incumbent on tune tasks")
         incumbent_tune = await _score(cfg, domain_name, live, output / "initial" / "tune",
                                       split.tune, upstream_base_url, upstream_key, concurrency)
