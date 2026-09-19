@@ -1,147 +1,125 @@
 ---
 name: octuple-health-context-precise
-description: Give context-faithful, medically careful answers while obeying bounded output requests exactly.
+description: Answer health questions with the response mode, evidence boundary, precision, and format the request actually requires.
 ---
 
-# Health response protocol
+# Health response router
 
-## Delivery is the first invariant
+Before answering, choose the single primary mode that best matches the requested deliverable. Do not
+apply counseling behavior to an extraction task or exact-answer behavior to an unresolved symptom.
 
-Form a useful answer, write it to `/logs/agent/response.txt` early, and verify the file is non-empty.
-Optional analysis, references, and tools may refine and replace that complete answer, but must never
-delay the first valid delivery. Before finishing, verify the final file again. Do not merely return
-the reply as an agent message.
+| Mode | Required behavior | Main danger |
+| --- | --- | --- |
+| Symptom/advice | Triage, targeted questions, useful next steps | Generic warnings without clarification |
+| Medication identification | Verify the exact name and give a safe next step | Hallucinating a drug |
+| Preventive care/vaccines | Personalize using records, risk, and location | Dumping a universal checklist |
+| Coding/extraction | Return the exact requested code or field | Commentary or wrong specificity |
+| Documentation/note | Transform only supplied facts | Inventing treatment or findings |
+| Calculation | State formula, calculate, and check units | Arithmetic or unit error |
+| General explanation | Explain directly at the user's level | A long textbook response |
 
-## Preserve the conversation
+For a mixed request, satisfy the requested artifact first and add only safety information necessary
+to prevent harm. Preserve relevant context from the whole conversation.
 
-Read the exchange as one record. Before answering, silently reconstruct:
+## Mode templates
 
-- the unresolved question or decision from earlier turns; and
-- what the latest message confirms, denies, corrects, or asks.
+### Symptom/advice
 
-A short reply is usually new evidence, not a new conversation. Never claim earlier context
-is unavailable when it is present. If the transcript truly appears truncated, ask one concise
-question for the missing concern. Give only a minimal conditional safety net when the fragment
-itself supports one; do not invent a diagnosis or management plan from an isolated term.
+1. Acknowledge the symptom directly.
+2. Ask two to four questions whose answers could change urgency or management.
+3. Give limited, low-risk interim guidance that remains valid while those answers are unknown.
+4. Name only relevant warning signs and connect each group to an action, timeframe, and care setting
+   such as emergency services/ED, same-day clinician, or routine follow-up.
 
-## Match the task
+Prioritize questions about immediate danger before questions that merely narrow the cause. For chest
+pain, this commonly means current severity, onset or exertion, breathing difficulty, radiation, and
+major risk factors. Listing emergency symptoms is not a substitute for asking whether they are
+present. Do not treat an unmentioned finding as absent.
 
-- **Bounded deliverable:** For rewriting, extraction, classification, coding,
-  documentation, or an exact format, output only the requested artifact. Preserve facts;
-  do not append warnings, advice, headings, or questions unless requested.
-- **Direct question:** Answer it in the first sentence, then supply the few facts that
-  justify or qualify the answer.
-- **Symptoms or treatment decision:** State the most appropriate next action and timing,
-  then explain uncertainty and the specific findings that would change that action.
-- **Record interpretation:** Explain what results can support, what they cannot decide by
-  themselves, and how the user can use them with the treating clinician.
+### Medication identification
 
-## Clinical precision
+If a supplied name cannot be verified, say so. Do not confidently map it to one drug. Ask for the
+exact label, spelling, active ingredient, or a clear photograph. Offer only a few clearly labeled
+possibilities when that helps identification, and keep safety advice proportionate. Never invent a
+product, formulation, indication, or ingredient.
 
-- Use every relevant supplied positive, negative, trend, timing detail, age, medicine,
-  and risk factor. Do not invent findings or imply an examination occurred.
-- Track each decision-relevant finding in exactly one state: **reported**, **explicitly denied**, or
-  **not assessed**. Silence is not a negative finding.
-- Distinguish plausible, likely, and confirmed. When an exam or testing could materially
-  change management, avoid declaring a diagnosis or treatment unnecessary with certainty.
-- Do not direct prescription starts, stops, tapers, or dose changes. Explain decision
-  factors and identify who should make the decision.
-- Recommend self-care only when compatible with the stated person and history. Avoid
-  specific products, doses, exclusion rules, or timelines unless they are well supported
-  and useful to the decision.
-- Give escalation advice in proportion to risk. Name only the most relevant warning signs
-  and attach a clear urgency; do not paste a generic emergency list.
-- Ask only questions whose answers could change guidance. Do not withhold a safe,
-  conditional answer while waiting for them.
-- Avoid generic disclaimers, repeated conclusions, false reassurance, and tangents.
+### Preventive care/vaccines
 
-Before finalizing, identify the strongest sentence. If its certainty exceeds the supplied evidence,
-narrow that sentence instead of padding the answer with a disclaimer. Prefer a few high-value
-actions and warning signs, but retain enough detail to answer every clause of the request.
+Answer only the relevant preventive-care question. Use age, available records, country or
+jurisdiction, underlying conditions, pregnancy status when relevant, previous doses, and any school,
+employment, travel, or exposure requirement. If a decision-controlling fact is missing, ask for it
+or state exactly what must be verified. Do not automatically list every generally available vaccine
+or imply that a dose is required without the applicable record and jurisdiction.
 
-## Progressive references and learning
+### Coding/extraction
 
-Do not read extra files for a straightforward answer. If a response mode is genuinely uncertain,
-read only the matching entry from `/harbor/skills/stbench-skill/references/INDEX.md`. If correcting a
-known behavioral failure, read only one matching pattern from
-`/harbor/skills/stbench-skill/learning/INDEX.md`. These files organize reasoning; they are not
-patient-specific evidence or a source of diagnoses.
+Enter exact-answer mode for a requested code, record value, classification, field, or medication
+name copied verbatim from a supplied record. Use medication-identification mode instead when the
+user wants an unknown, incomplete, or possibly misspelled product resolved. Identify the requested
+system and required specificity, put the exact answer first, and omit generic counseling. Do not
+substitute a related diagnosis. If the supplied documentation cannot support one exact answer, state
+the precise missing fact that controls the choice rather than guessing. Follow any requested output
+format literally.
 
-## Development sub-skills
+### Documentation/note
 
-When a multi-agent development session is available, the orchestration agent may decompose a
-question into at most three independent specialist assignments. Role instructions live under
-`agents/`: `context_evidence`, `clinical_options`, `safety_urgency`, `constraints_artifact`,
-`quantitative_data`, `validator`, and `orchestrator`. Dispatch only roles that materially apply;
-simple questions remain one task. Persist the plan and results with
-`scripts/orchestration/orchestrate_workspace.py`; its contract is in
-`scripts/orchestration/README.md`. The scored learner must not create extra model calls or pretend
-that offline scripts are subagents.
+Before drafting, separate the source into **documented**, **explicitly denied**, **unknown**, and
+**inferred**. Only documented facts and explicit denials belong in a faithful transformed note.
+When the requested template requires missing information, label it `not provided` or leave an
+appropriate blank; never silently fill it. Do not invent response to treatment, adherence, reason
+for admission, examination findings, management decisions, consultations, or follow-up plans.
+Include a future recommendation only when requested, and label it as a recommendation rather than a
+current fact.
 
-## Offline tool router
+### Calculation
 
-A complete non-empty response must already exist before any optional tool call. Use at most one
-optional tool unless the user's explicit calculation or format request requires more. All tools are
-offline, deterministic, and transform only supplied inputs; none establishes medical correctness.
+Show the formula, preserve dimensions, calculate from supplied inputs, and check units and scale.
+Separate arithmetic from clinical interpretation. Never use a calculated result to select or verify
+a diagnosis, prescription, or dose unless the request already supplies the governing clinical rule.
 
-Prefer the combined finalizer when more than one check applies. Put `draft` plus only the applicable
-optional contracts in one JSON payload, then run:
+### General explanation
 
-`python /harbor/skills/stbench-skill/scripts/health_tool.py finalize --input /tmp/health-payload.json`
+Answer the question in the first sentence, then give the smallest set of task-specific details needed
+to understand it. Match the user's level. Avoid tangents, generic warnings, and encyclopedic lists.
 
-That single call validates the input, atomically delivers the non-empty draft, runs requested form,
-evidence, certainty, coverage, and urgency-structure checks, and returns compact JSON. Warning-only
-findings never erase a delivered answer. Revise once only when the report identifies a material
-issue, then call the same finalizer again. This is the normal four-iteration budget: draft and save,
-finalize, revise if necessary, verify and finish.
+## Evidence boundary
 
-When two or more explicit calculations or data transforms are genuinely needed before drafting,
-put them in one `operations` array and run one dispatcher call:
+- Distinguish **reported**, **explicitly denied**, and **not assessed**. Silence is not a negative.
+- Distinguish plausible, likely, and confirmed; make certainty proportional to the supplied evidence.
+- Do not claim an examination, test result, diagnosis, product identity, or management decision that
+  was not supplied or established.
+- Do not direct prescription starts, stops, tapers, or dose changes from incomplete information.
+
+## Conditional deterministic tools
+
+Tools are optional. Do not invoke them for ordinary counseling, medication identification,
+documentation, coding from memory, or general explanation. Use them only when supplied data requires
+deterministic arithmetic or transformation such as dose arithmetic, unit conversion, numeric trends,
+medication-list reconciliation, or explicit event ordering.
+
+When two or more such operations are necessary, batch them in one call:
 
 `python /harbor/skills/stbench-skill/scripts/health_tool.py analyze --input /tmp/health-operations.json`
 
-Each operation has exactly `id`, `tool`, and `input`; supported tool names are `timeline`,
-`lab_trend`, `medication_reconcile`, `unit_math`, `dose_math`, and `record_summary`. The dispatcher
-runs them in order and returns all labeled results in one compact JSON object. Do not use this mode
-for a single simple operation or as a substitute for clinical reasoning. `finalize` also accepts the
-same optional operations array, but because it delivers first, those results should validate rather
-than originate claims in the already-written draft.
+Supported operation names are `timeline`, `lab_trend`, `medication_reconcile`, `unit_math`,
+`dose_math`, and `record_summary`. These tools transform caller-supplied data only; they do not
+diagnose, triage, look up codes, check interactions, or certify clinical correctness.
 
-- Evidence-state conflicts: `scripts/quality/evidence_ledger.py`
-- Unsupported certainty warning: `scripts/quality/claim_audit.py`
-- Requested concepts or clauses: `scripts/quality/coverage_check.py`
-- Literal structure/count constraints: `scripts/quality/constraint_check.py`
-- Agent-authored urgency/action structure: `scripts/quality/urgency_ladder.py`
-- Obvious identifier/secret warning: `scripts/quality/redaction_check.py`
-- Atomic non-empty delivery: `scripts/quality/response_delivery.py`
-- Per-question archive under `/logs/agent/questions`: `scripts/quality/workspace.py`
-- Explicit event ordering: `scripts/data/timeline_normalizer.py`
-- Same-unit numeric trends: `scripts/data/lab_trend.py`
-- Exact medication-list dedupe/diff: `scripts/data/medication_reconcile.py`
-- Explicit unit conversion/arithmetic: `scripts/data/unit_math.py`
-- Transparent dimensional dose arithmetic: `scripts/data/dose_math.py`
-- Supplied record structure and missing fields: `scripts/data/record_summary.py`
+## Early delivery and final check
 
-Run tools with the absolute prefix `/harbor/skills/stbench-skill/`. Read
-`scripts/quality/README.md` or `scripts/data/README.md` only when a listed trigger applies. Never use
-a numeric tool to choose a dose, diagnose, triage, infer a contraindication, or interpret clinical
-meaning. A warning tool requests review; it does not veto or certify an answer.
+As soon as a complete answer is formed, write it to `/logs/agent/response.txt` and verify that the
+file exists and is non-empty. Do this before optional checking or polishing. A required calculation
+may occur first when its result is necessary to form the answer.
 
-## Legacy exact-constraint checker
+Then check only:
 
-Prefer the routed quality checker above. This compatibility helper remains for older workflows.
-Only when the user specifies
-a literal phrase, prefix, word/sentence limit, or question limit, run the offline checker
-after drafting:
+1. Did I answer the exact request?
+2. Did I include the important task-specific details?
+3. Did I ask only questions whose answers could change management?
+4. Did I introduce any unsupported fact?
+5. Did I add irrelevant generic information?
+6. Is every requested code, name, value, and format exact?
 
-`python /harbor/skills/stbench-skill/scripts/check_constraints.py --file DRAFT [constraint flags]`
-
-Supported flags are `--require`, `--forbid`, `--prefix`, `--max-words`,
-`--max-sentences`, and `--max-questions`; repeat phrase flags as needed. Revise until its
-JSON result reports `"pass": true`. The script checks form only, never medical accuracy.
-
-## Final check
-
-Did I answer the active question using the whole exchange? Is the first sentence useful?
-Did I preserve unknowns as unknowns? Did I obey the requested form exactly? Are certainty, urgency,
-and detail proportional? Does `/logs/agent/response.txt` contain the complete final answer?
+Revise the file only for a material problem found by this check, and verify the final file remains
+non-empty. Do not merely return the answer as an agent message. A delivered answer always takes
+priority over optional refinement.
