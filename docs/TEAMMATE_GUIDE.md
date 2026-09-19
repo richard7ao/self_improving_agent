@@ -79,7 +79,7 @@ Use `--tasks name1,name2` to make two candidates run on exactly the same example
 
 The optimizer generates complete alternative skill folders, validates them, evaluates
 candidates concurrently, validates the strongest challenger, and atomically promotes it
-only when its aggregate score improves.
+only when its aggregate score and reserved validation score both improve.
 
 Fast health smoke run:
 
@@ -147,8 +147,9 @@ domain's placeholder `SKILL.md`. Domain-specific reminders:
 - **health:** distinguish bounded documentation/coding tasks from advice; do not inject
   unsolicited triage language into a tightly formatted request.
 
-The optimizer is generic, but its task-context extractor is richest for HealthBench. For
-other domains, review Harbor trajectories carefully before trusting an automated rewrite.
+The optimizer reads task instructions and bounded learner trajectory excerpts for finance.
+It excludes verifier files and validation attempts from reviewer input. See
+`docs/FINANCE_LOOP.md` for the first finance experiment and its limitations.
 
 ## Git handoff
 

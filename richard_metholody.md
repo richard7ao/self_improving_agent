@@ -145,7 +145,8 @@ learner and the pinned HealthBench grader. Candidates are ranked by mean tune sc
 the top tune candidate spends validation budget.
 
 The challenger is promoted only when its task-count-weighted tune plus validation score
-exceeds the incumbent by more than `--min-improvement`. A tie never replaces the incumbent.
+exceeds the incumbent by more than `--min-improvement` and its validation score strictly
+improves. A validation tie or regression never replaces the incumbent.
 This is an elitist survivor strategy: the live skill cannot regress according to the run's
 fixed evaluation set.
 

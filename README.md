@@ -73,7 +73,7 @@ agent (Claude Code, Codex, ...): point it at this repo and let it call `stbench 
 To run an automated survivor tournament, use `stbench optimize`. It reviews the
 current skill's training failures, generates several complete skill-folder variants,
 scores them on a fixed tune split, validates the strongest challenger on held-back
-training tasks, and promotes it only when its aggregate score improves:
+training tasks, and promotes it only when its aggregate and validation scores improve:
 
 ```bash
 uv run stbench optimize --domain health \
@@ -85,6 +85,7 @@ uv run stbench optimize --domain health \
 This command makes additional model calls and benchmark runs, so start small. See
 [`richard_metholody.md`](richard_metholody.md) for the design, safety constraints,
 selection rule, and run artifacts.
+For the sequential finance reviewer/worker loop, see [`docs/FINANCE_LOOP.md`](docs/FINANCE_LOOP.md).
 
 ## Scoring
 
